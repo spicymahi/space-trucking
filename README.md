@@ -40,7 +40,7 @@ You start on foot on pad 07 at Ceres Yard, behind your ship, the Kestrel-9.
 | Pause (controls list, quit) | P | Start |
 | Throttle up / down | W / S | RT / LT |
 | Strafe | A / D | Right stick X |
-| Up / down thrust | Space / Ctrl | Right stick Y |
+| Up / down thrust | Space / Z | Right stick Y |
 | Pitch / yaw | Mouse or arrow keys | Left stick |
 | Roll | Q / E | LB / RB |
 | Nav computer | N | Y |
@@ -48,7 +48,7 @@ You start on foot on pad 07 at Ceres Yard, behind your ship, the Kestrel-9.
 | Cruise | C | L3 |
 | Sell all on pallet (exchange) | R | X |
 
-On the nav computer, you can type digits directly, or click the keys, or move with the D-pad and press A. Enter is ENT, Tab is DIR and Backspace deletes.
+On the nav computer, you can type digits directly, or click the keys, or move with the D-pad and press A. Enter is ENT, Tab is DIR, Backspace deletes a digit and X (or Delete) is CLR.
 
 ## What is in this build
 

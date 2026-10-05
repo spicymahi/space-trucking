@@ -85,9 +85,9 @@ func _build_hangar() -> void:
 		Vox.solid(hull, Vector3(27.4 * sx, 6, -49.8), Vector3(45.2, 1.6, 0.4), accent)
 		Vox.solid(hull, Vector3(27.4 * sx, 1.2, -49.8), Vector3(45.2, 2.4, 0.4), Vox.DBROWN)
 	# Door frame and signs
-	Vox.box(self, Vector3(-4.4, 3.2, -49.7), Vector3(0.8, 6.4, 0.6), Vox.MUSTARD)
-	Vox.box(self, Vector3(4.4, 3.2, -49.7), Vector3(0.8, 6.4, 0.6), Vox.MUSTARD)
-	Vox.box(self, Vector3(0, 6.4, -49.7), Vector3(9.6, 0.8, 0.6), Vox.MUSTARD)
+	Vox.solid(hull, Vector3(-4.4, 3.2, -49.7), Vector3(0.8, 6.4, 0.6), Vox.MUSTARD)
+	Vox.solid(hull, Vector3(4.4, 3.2, -49.7), Vector3(0.8, 6.4, 0.6), Vox.MUSTARD)
+	Vox.solid(hull, Vector3(0, 6.4, -49.7), Vector3(9.6, 0.8, 0.6), Vox.MUSTARD)
 	Vox.label(self, "CONCOURSE · MARKET", Vector3(0, 8.6, -49.6), 0.012, Vox.CREAM, GameState.font_label)
 	Vox.label(self, "PAD 07", Vector3(0, 20, -49.6), 0.07, Vox.MUSTARD, GameState.font_label)
 	# Ceiling lamps
@@ -140,6 +140,7 @@ func _build_pad() -> void:
 				s.position = pc + Vector3((col - 1) * 2.6, 1.0 + layer * 1.62, (row - 1) * 2.6)
 				add_child(s)
 				pallet_slots.append(s)
+	Slot.link_stacks(pallet_slots)
 
 
 func _build_concourse() -> void:
@@ -152,7 +153,7 @@ func _build_concourse() -> void:
 		Vox.box(self, Vector3(7.9 * sx, 1.5, -78), Vector3(0.2, 0.35, 44), accent)
 		Vox.box(self, Vector3(7.9 * sx, 1.95, -78), Vector3(0.2, 0.18, 44), Vox.MUSTARD)
 		for z in range(-58, -100, -8):
-			Vox.box(self, Vector3(7.6 * sx, 4.5, z), Vector3(0.8, 9, 1.2), Vox.BROWN)
+			Vox.solid(hull, Vector3(7.6 * sx, 4.5, z), Vector3(0.8, 9, 1.2), Vox.BROWN)
 	for z in range(-58, -100, -4):
 		Vox.box(self, Vector3(0, 8.9, z), Vector3(10, 0.15, 1.2), Vox.LAMP, true)
 	for z in [-62, -76, -92]:
@@ -248,7 +249,8 @@ func pallet_count(commodity: String) -> int:
 ## Removes up to qty crates of a commodity from the pallet. Returns how many were removed.
 func take_from_pallet(commodity: String, qty: int) -> int:
 	var n := 0
-	for s in pallet_slots:
+	for i in range(pallet_slots.size() - 1, -1, -1): # top layer first
+		var s := pallet_slots[i]
 		if n >= qty:
 			break
 		if s.occupant and s.occupant.commodity == commodity:
@@ -256,6 +258,10 @@ func take_from_pallet(commodity: String, qty: int) -> int:
 			c.remove_from_slot()
 			c.queue_free()
 			n += 1
+	# Lower anything left hanging over an emptied slot.
+	for s in pallet_slots:
+		if s.occupant and not s.is_supported():
+			s.occupant.place_in(s.below)
 	return n
 
 

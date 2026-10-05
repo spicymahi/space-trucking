@@ -185,7 +185,7 @@ Use, lift, place crate   F                     A
 
 IN THE COCKPIT
 Throttle fwd / back      W / S                 RT / LT
-Strafe, up / down        A D, Space / Ctrl     RS
+Strafe, up / down        A D, Space / Z        RS
 Pitch / yaw              Mouse or arrows       LS
 Roll                     Q / E                 LB / RB
 Request dock / land      L                     X
@@ -265,11 +265,11 @@ func _process(delta: float) -> void:
 	if mode == "foot":
 		_hints.text = "LS walk · RS look · A use · Start pause" if g else "WASD walk · Mouse look · F use · Esc pause"
 	elif mode == "pilot" and ship.nav_mode:
-		_hints.text = "D-pad pick key · A press · B close" if g else "Type digits · Enter = ENT · Tab = DIR · Backspace · click keys · Esc close"
+		_hints.text = "D-pad pick key · A press · B close" if g else "Type digits · Enter = ENT · Tab = DIR · X = CLR · Backspace · click keys · Esc close"
 	elif mode == "pilot":
 		var land := ship.state == Ship.State.LANDED
 		if g:
 			_hints.text = ("RT / RS up to lift off · Y nav · A leave seat" if land else "RT/LT throttle · LS pitch/yaw · LB/RB roll · RS strafe · X dock · Y nav · L3 cruise")
 		else:
-			_hints.text = ("W or Space to lift off · N nav · F leave seat" if land else "W/S throttle · Mouse pitch/yaw · Q/E roll · A/D strafe · Space/Ctrl up/down · L dock · N nav · C cruise")
+			_hints.text = ("W or Space to lift off · N nav · F leave seat" if land else "W/S throttle · Mouse pitch/yaw · Q/E roll · A/D strafe · Space/Z up/down · L dock · N nav · C cruise")
 	_layout()

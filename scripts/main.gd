@@ -299,12 +299,18 @@ func _selftest() -> void:
 	var in_hold := ship.to_local(player.global_position)
 	ok = _check(walked and absf(in_hold.y - 0.3) < 0.2, "walked up the ramp into the hold carrying a crate (hold floor height %.2f)" % in_hold.y) and ok
 	player.place(ship.hold_slots[0])
+	# Cockpit furniture is solid: walking at the dash stops short of it.
+	await _walk_to(ship.to_global(Vector3(0, 0.3, -2)))
+	await _walk_to(ship.to_global(Vector3(3.0, 0.3, -13)), 240)
+	var at_dash := ship.to_local(player.global_position)
+	ok = _check(at_dash.z > -11.0 and absf(at_dash.y - 0.3) < 0.2, "walked into the cockpit and stopped at the dash (z %.2f, front at -11.2)" % at_dash.z) and ok
 	for i in range(1, crates.size()):
 		player.pick_up(crates[i])
 		player.place(ship.hold_slots[i])
 	await _frames(2)
 	ok = _check(ship.hold_count() == 4 and ceres.pallet_count("water_ice") == 0, "moved 4 crates from the pallet into the hold") and ok
 	ok = _check(ship.hold_slots[0].occupant.get_parent() == ship, "hold crates are attached to the ship") and ok
+	ok = _check(ship.hold_slots[8].can_take() and not ship.hold_slots[12].can_take() and ship.hold_slots[12].is_free(), "upper hold slots only take a crate when the slot below is filled") and ok
 
 	# Board and plot a course to Tharsis Ring on the keypad: X +024, Y +003, Z -068.
 	_on_seat()
@@ -325,14 +331,30 @@ func _selftest() -> void:
 	await _frames(120)
 	ok = _check(ship.velocity.length() < 5.0, "flight assist brings the ship to a stop on release (%.1f m/s)" % ship.velocity.length()) and ok
 
-	# Cruise in open space, then check it drops near the destination.
-	ship.global_position = tharsis.global_position + (tharsis.global_position - ceres.global_position).normalized() * 6000.0
+	# The nacelles are solid: strafing into the hangar wall stops them at the wall.
+	ship.global_transform = ceres.global_transform * Transform3D(Basis(Vector3.UP, PI), Vector3(36, 12, 0))
+	ship.velocity = Vector3.ZERO
+	Input.action_press("strafe_left")
+	await _frames(180)
+	Input.action_release("strafe_left")
+	var wall_x := ceres.to_local(ship.global_position).x
+	ok = _check(wall_x < 41.5, "nacelles stop the ship at the hangar wall (centre x %.2f, limit 41.4)" % wall_x) and ok
+
+	# Cruise the real run: from just outside Ceres Yard to Tharsis Ring.
+	var dir := (tharsis.global_position - ceres.global_position).normalized()
+	ship.global_position = ceres.global_position + dir * 1600.0
+	ship.velocity = Vector3.ZERO
 	ship.look_at(tharsis.global_position)
 	ship.toggle_cruise()
-	ok = _check(ship.cruise, "cruise engages in open space") and ok
-	await _frames(60 * 14)
+	await _frames(60)
+	ok = _check(ship.cruise, "cruise engages 1.6 km out of Ceres Yard and stays on as you leave") and ok
+	var t := 0
+	while ship.cruise and t < 60 * 20:
+		await get_tree().physics_frame
+		t += 1
+	await _frames(150)
 	var stop_d := ship.global_position.distance_to(tharsis.global_position)
-	ok = _check(not ship.cruise and stop_d < 3000 and stop_d > 800, "cruise drops out and slows before reaching Tharsis Ring (%.0f m out)" % stop_d) and ok
+	ok = _check(not ship.cruise and stop_d < 1500 and stop_d > 300, "cruise drops out near Tharsis Ring and slows to a stop %.0f m out" % stop_d) and ok
 
 	# Dock: request, move over the pad, land.
 	ship.global_position = tharsis.global_position + Vector3(0, 30, 300)

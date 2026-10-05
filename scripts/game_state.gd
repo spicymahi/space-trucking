@@ -175,7 +175,7 @@ func setup_input() -> void:
 	_bind("strafe_left", [_key(KEY_A), _axis(JOY_AXIS_RIGHT_X, -1)])
 	_bind("strafe_right", [_key(KEY_D), _axis(JOY_AXIS_RIGHT_X, 1)])
 	_bind("thrust_up", [_key(KEY_SPACE), _axis(JOY_AXIS_RIGHT_Y, -1)])
-	_bind("thrust_down", [_key(KEY_CTRL), _axis(JOY_AXIS_RIGHT_Y, 1)])
+	_bind("thrust_down", [_key(KEY_Z), _axis(JOY_AXIS_RIGHT_Y, 1)])
 	_bind("pitch_up", [_key(KEY_UP), _axis(JOY_AXIS_LEFT_Y, 1)])
 	_bind("pitch_down", [_key(KEY_DOWN), _axis(JOY_AXIS_LEFT_Y, -1)])
 	_bind("yaw_left", [_key(KEY_LEFT), _axis(JOY_AXIS_LEFT_X, -1)])

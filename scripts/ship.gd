@@ -17,7 +17,7 @@ const ACCEL := 28.0
 const CRUISE_SPEED := 650.0
 const CRUISE_ACCEL := 140.0
 const CRUISE_DECEL := 280.0
-const CRUISE_DROP_DIST := 3000.0
+const CRUISE_DROP_DIST := 1500.0
 const TURN := Vector3(1.1, 0.9, 1.8)
 const LAND_MAX_SPEED := 14.0
 const DOCK_RANGE := 5000.0
@@ -79,15 +79,17 @@ func _build_hull() -> void:
 		Vox.box(self, Vector3(5.55 * sx, 4.2, 1), Vector3(0.1, 1.0, 30), Vox.ORANGE)
 		Vox.box(self, Vector3(5.55 * sx, 3.4, 1), Vector3(0.1, 0.35, 30), Vox.MUSTARD)
 		# Engine nacelles and landing legs
-		Vox.box(self, Vector3(6.9 * sx, 3, 11), Vector3(2.6, 2.8, 8), Vox.BEIGE3)
+		Vox.solid(self, Vector3(6.9 * sx, 3, 11), Vector3(2.6, 2.8, 8), Vox.BEIGE3)
 		_engine_glow.append(Vox.box(self, Vector3(6.9 * sx, 3, 15.1), Vector3(2, 2, 0.2), Color("ff9a3c"), true))
 		for z in [-9, 11]:
-			Vox.box(self, Vector3(3.5 * sx, -0.85, z), Vector3(0.6, 1.7, 0.6), Vox.DBROWN)
+			Vox.solid(self, Vector3(3.5 * sx, -0.85, z), Vector3(0.6, 1.7, 0.6), Vox.DBROWN)
 			Vox.box(self, Vector3(3.5 * sx, -1.85, z), Vector3(1.4, 0.3, 1.4), Vox.DBROWN)
+			# Foot collider stops 5 cm short of the pad so a landed ship isn't touching it.
+			Vox.add_shape(self, Vector3(3.5 * sx, -1.825, z), Vector3(1.4, 0.25, 1.4))
 	Vox.solid(self, Vector3(0, 6.8, 1), Vector3(11, 0.6, 30), Vox.BEIGE)
 	Vox.solid(self, Vector3(0, 4.85, -4), Vector3(2.6, 3.9, 0.4), Vox.BEIGE2)
 	Vox.solid(self, Vector3(0, 0.9, -14), Vector3(10.4, 1.2, 0.4), Vox.BEIGE)
-	Vox.box(self, Vector3(0, 1.0, -15), Vector3(8, 1.8, 1.6), Vox.BEIGE2)
+	Vox.solid(self, Vector3(0, 1.0, -15), Vector3(8, 1.8, 1.6), Vox.BEIGE2)
 	Vox.box(self, Vector3(0, 1.2, -15.82), Vector3(8, 0.3, 0.05), Vox.ORANGE)
 	Vox.box(self, Vector3(0, 7.6, 4), Vector3(0.3, 1.4, 0.3), Vox.DBROWN)
 	Vox.box(self, Vector3(0, 8.4, 4), Vector3(0.4, 0.4, 0.4), Color("ff4a2e"), true)
@@ -125,6 +127,7 @@ func _build_hold() -> void:
 						Vox.box(self, Vector3(3.0 * side, 0.31, 0.6 + row * 2.7) + e, Vector3(0.08, 0.02, 2.3), Vox.MUSTARD)
 					for e in [Vector3(0, 0, 1.15), Vector3(0, 0, -1.15)]:
 						Vox.box(self, Vector3(3.0 * side, 0.31, 0.6 + row * 2.7) + e, Vector3(2.3, 0.02, 0.08), Vox.MUSTARD)
+	Slot.link_stacks(hold_slots)
 	Vox.label(self, "HOLD · 32 SCU", Vector3(0, 5.2, -3.78), 0.008, Vox.DBROWN, GameState.font_label)
 
 
@@ -136,22 +139,25 @@ func _build_cockpit() -> void:
 	l.light_color = Color("ffd9a0")
 	add_child(l)
 	# Seat
-	Vox.box(self, Vector3(0, 0.8, -8), Vector3(1.3, 0.5, 1.3), Vox.BROWN)
-	Vox.box(self, Vector3(0, 1.75, -7.35), Vector3(1.3, 1.7, 0.3), Vox.ORANGE)
+	Vox.solid(self, Vector3(0, 0.8, -8), Vector3(1.3, 0.5, 1.3), Vox.BROWN)
+	Vox.solid(self, Vector3(0, 1.75, -7.35), Vector3(1.3, 1.7, 0.3), Vox.ORANGE)
+	Vox.add_shape(self, Vector3(0, 0.5, -8), Vector3(1.3, 0.6, 1.3)) # seat base down to the floor
 	var seat := Interactable.new("Fly ship", Vector3(1.6, 2.2, 1.6))
 	seat.position = Vector3(0, 1.3, -7.9)
 	add_child(seat)
 	seat.used.connect(func(_by): pilot_seat_used.emit())
 	# Dashboard
-	Vox.box(self, Vector3(0, 0.9, -12.4), Vector3(9.6, 1.2, 1.6), Vox.BEIGE)
+	Vox.solid(self, Vector3(0, 0.9, -12.4), Vector3(9.6, 1.2, 1.6), Vox.BEIGE)
+	Vox.add_shape(self, Vector3(0, 0.85, -11.4), Vector3(6.8, 1.3, 0.4)) # CRT bank
 	Vox.box(self, Vector3(0, 1.53, -12.4), Vector3(9.6, 0.06, 1.7), Vox.DBROWN)
 	for i in 10:
 		Vox.box(self, Vector3(-2.25 + i * 0.5, 1.57, -11.75), Vector3(0.25, 0.02, 0.12), Vox.MUSTARD if i % 2 == 0 else Color("1a1410"))
 	Vox.box(self, Vector3(0, 0.3, -10.3), Vector3(2.6, 0.1, 1.5), Vox.BEIGE3)
+	Vox.add_shape(self, Vector3(0, 0.5, -10.3), Vector3(2.6, 0.6, 1.5)) # keypad shelf: no walking over the keys
 	# Canopy frame
 	for sx in [-1, 1]:
-		Vox.box(self, Vector3(4.15 * sx, 3.9, -13.75), Vector3(0.7, 5.0, 0.5), Vox.DBROWN)
-		Vox.box(self, Vector3(4.7 * sx, 1.8, -12.0), Vector3(0.5, 0.5, 4), Vox.DBROWN)
+		Vox.solid(self, Vector3(4.15 * sx, 3.9, -13.75), Vector3(0.7, 5.0, 0.5), Vox.DBROWN)
+		Vox.solid(self, Vector3(4.7 * sx, 1.8, -12.0), Vector3(0.5, 0.5, 4), Vox.DBROWN)
 	Vox.box(self, Vector3(0, 6.15, -13.75), Vector3(9, 0.6, 0.5), Vox.DBROWN)
 	# CRTs
 	crt_scan = CrtScreen.new(Vector2(1.8, 1.3), Vector2i(512, 384), Vox.PHOS_GREEN, 28)
@@ -418,8 +424,11 @@ func _fly(delta: float) -> void:
 			cruise = false
 			GameState.say("Cruise off.")
 		else:
+			# Drop out near the course target, or near a station we are closing on,
+			# never near the one we are leaving.
 			var st := nearest_station()
-			var near_st := st != null and global_position.distance_to(st.global_position) < CRUISE_DROP_DIST
+			var near_st := st != null and global_position.distance_to(st.global_position) < CRUISE_DROP_DIST \
+				and velocity.dot(st.global_position - global_position) > 0.0
 			var near_target: bool = course_target != null and global_position.distance_to(course_target) < CRUISE_DROP_DIST
 			if near_st or near_target:
 				cruise = false

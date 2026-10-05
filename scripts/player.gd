@@ -160,14 +160,18 @@ func _update_aim() -> void:
 	prompt = ""
 	if carried:
 		_update_beam()
-		if hit is Slot and hit.is_free():
+		if hit is Slot and hit.can_take():
 			_ghost.global_transform = hit.global_transform
 			_ghost.visible = true
 			prompt = "Place crate in " + hit.describe()
+		elif hit is Slot and hit.is_free():
+			prompt = "Fill the slot underneath first"
 		elif hit is Slot:
 			prompt = "That slot is full"
 		else:
 			prompt = "Aim at an empty slot in your hold or on the pallet"
+	elif hit is Crate and hit.slot and hit.slot.is_buried():
+		prompt = "Lift the crate on top first"
 	elif hit is Crate:
 		prompt = "Lift crate · " + hit.display_name()
 	elif hit is Interactable:
@@ -189,12 +193,16 @@ func use() -> void:
 	ray.force_raycast_update()
 	var hit := ray.get_collider() if ray.is_colliding() else null
 	if carried:
-		if hit is Slot and hit.is_free():
+		if hit is Slot and hit.can_take():
 			place(hit)
+		elif hit is Slot and hit.is_free():
+			GameState.say("Fill the slot underneath first. Crates stack from the floor up.")
 		else:
 			GameState.say("Aim at a free hold or pallet slot to set the crate down.")
 		return
-	if hit is Crate:
+	if hit is Crate and hit.slot and hit.slot.is_buried():
+		GameState.say("Lift the crate on top first.")
+	elif hit is Crate:
 		pick_up(hit)
 	elif hit is Interactable:
 		hit.interact(self)

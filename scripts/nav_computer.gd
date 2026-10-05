@@ -81,7 +81,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			match k:
 				KEY_ENTER, KEY_KP_ENTER: handled = "ENT"
 				KEY_BACKSPACE: handled = "<"
-				KEY_DELETE: handled = "CLR"
+				KEY_DELETE, KEY_X: handled = "CLR"
 				KEY_MINUS, KEY_EQUAL, KEY_KP_SUBTRACT, KEY_KP_ADD: handled = "+/-"
 				KEY_TAB: handled = "DIR"
 		if handled != "":
