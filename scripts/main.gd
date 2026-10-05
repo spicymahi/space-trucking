@@ -29,6 +29,8 @@ var player: Player
 var hud: Hud
 var mode := "foot" # foot, pilot, terminal
 var bought_once := false
+var _carry_clips := 0 # self-test: frames a carried crate spent inside something
+var _carry_clip_at := ""
 
 
 func _ready() -> void:
@@ -249,9 +251,28 @@ func _walk_to(target: Vector3, max_frames := 900) -> bool:
 			break
 		player.rotation.y = atan2(-d.x, -d.z)
 		await get_tree().physics_frame
+		_note_carried_clear()
 	Input.action_release("move_forward")
 	player.velocity = Vector3.ZERO
 	return reached
+
+
+## Counts frames where the carried crate overlaps a wall, the ship or another crate (2 cm grace).
+func _note_carried_clear() -> void:
+	var c := player.carried
+	if c == null:
+		return
+	var box := BoxShape3D.new()
+	box.size = Slot.CRATE_SIZE * Player.CARRY_SCALE - Vector3.ONE * 0.04
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = box
+	q.transform = Transform3D(c.global_basis.orthonormalized(), c.global_position)
+	q.collision_mask = Vox.L_WORLD | Vox.L_SHIP | Vox.L_CRATE | Vox.L_BARRIER
+	var hits := get_world_3d().direct_space_state.intersect_shape(q, 1)
+	if not hits.is_empty():
+		_carry_clips += 1
+		if _carry_clip_at == "":
+			_carry_clip_at = " (first: into %s)" % hits[0].collider.name
 
 
 func _aim_at(p: Vector3) -> void:
@@ -324,9 +345,26 @@ func _selftest() -> void:
 	var crate_z := ceres.to_local(first.global_position).z
 	var half := Slot.CRATE_SIZE.z * Player.CARRY_SCALE / 2
 	ok = _check(crate_z - half > -49.65, "carried crate stops at the hangar wall instead of passing through (front at z %.2f, wall trim at -49.6)" % (crate_z - half)) and ok
+	# Turning on the spot against the wall: the crate swings round without being
+	# pushed into the wall, and it doesn't shove you around either.
+	var at_wall := player.global_position
+	for turn in ["look_left", "look_right"]:
+		Input.action_press(turn)
+		for f in 50:
+			await get_tree().physics_frame
+			_note_carried_clear()
+		Input.action_release(turn)
+	await _frames(2)
+	var shoved := player.global_position.distance_to(at_wall)
+	ok = _check(shoved < 0.05 and _carry_clips == 0, "turning against the wall with a crate doesn't shove you (moved %.2f m) or put the crate in the wall%s" % [shoved, _carry_clip_at]) and ok
 	walked = await _walk_to(ship.to_global(Vector3(0, -2, 28))) and await _walk_to(ship.to_global(Vector3(0, 0.3, 8)))
 	var in_hold := ship.to_local(player.global_position)
 	ok = _check(walked and absf(in_hold.y - 0.3) < 0.2, "walked up the ramp into the hold carrying a crate (hold floor height %.2f)" % in_hold.y) and ok
+	# Off-centre through the 2.6 m door into the cockpit and back: the crate tucks
+	# in past the door frame instead of catching on it.
+	walked = await _walk_to(ship.to_global(Vector3(0.55, 0.3, 0.5))) and await _walk_to(ship.to_global(Vector3(0.55, 0.3, -7.0)))
+	ok = _check(walked and player.carried == first, "carried the crate off-centre through the door into the cockpit") and ok
+	await _walk_to(ship.to_global(Vector3(0.55, 0.3, 0.5)))
 	var hs := ship.hold_slots # L1-L4, R1-R4 on the floor; L5-L8, R5-R8 on top
 	await _walk_to(ship.to_global(Vector3(0, 0.3, 2.0)))
 	await _aim_use(ship.to_global(hs[0].position))
@@ -483,6 +521,7 @@ func _selftest() -> void:
 	ok = _check(ship.hold_count() == 0 and tharsis.pallet_count("water_ice") == 0 and player.carried == null, "hand, pallet and hold are all empty after the sale") and ok
 	await _press_key(KEY_ESCAPE)
 	ok = _check(GameState.credits > start, "profit on the run: %d -> %d cr" % [start, GameState.credits]) and ok
+	ok = _check(_carry_clips == 0, "a carried crate never went into a wall, the ship or another crate on any walk (%d frames)%s" % [_carry_clips, _carry_clip_at]) and ok
 
 	print("SELFTEST " + ("OK" if ok else "FAILED"))
 	get_tree().quit(0 if ok else 1)
@@ -553,6 +592,10 @@ func _capture() -> void:
 	await _frames(2)
 	player._update_aim()
 	await _shot("04_loading")
+	# Up against the hangar wall, the carried crate is drawn in instead of going into it.
+	_look_from(ceres.to_global(Vector3(18.8, 0, -48.0)), ceres.to_global(Vector3(17.7, 1.05, -49.6)))
+	player._hold_carried()
+	await _shot("13_carry_at_wall")
 	player.place(Player.stack_target(ship.hold_slots[0].occupant))
 	_on_seat()
 	await _shot("05_cockpit")

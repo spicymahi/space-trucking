@@ -9,10 +9,15 @@ const GRAVITY := 18.0
 const REACH := 4.0
 const LOOK_SENS := 0.0025
 const STICK_LOOK := 2.6
-## A carried crate is held at waist height, front right of you (yaw only, so it never hides your aim), and becomes
-## part of your collision, so it can't pass through walls, crates or the ramp.
+## A carried crate is held at waist height, front right of you (yaw only, so it never hides your aim).
+## When a wall or another crate is in the way, it's drawn in toward you instead of passing through.
 const CARRY_POS := Vector3(0.8, 1.0, -1.3)
+const CARRY_FROM := Vector3(0, 0.8, 0) # drawn in low, so it stays under your aim
 const CARRY_SCALE := 0.45
+## While carrying, a round collider at crate height keeps walls far enough away that the crate always
+## fits beside you. It's round and centred, so turning never shoves you, and a doorway only needs you
+## roughly centred in it.
+const CARRY_RADIUS := 0.72
 
 var active := true
 var cam: Camera3D
@@ -24,6 +29,7 @@ var _ghost: MeshInstance3D
 var _tool: Node3D
 var _beam: MeshInstance3D
 var _carry_shape: CollisionShape3D
+var _carry_box: BoxShape3D
 
 
 func build() -> void:
@@ -40,12 +46,15 @@ func build() -> void:
 	cs.position.y = 0.9
 	add_child(cs)
 	_carry_shape = CollisionShape3D.new()
-	var cb := BoxShape3D.new()
-	cb.size = Slot.CRATE_SIZE * CARRY_SCALE
-	_carry_shape.shape = cb
-	_carry_shape.position = CARRY_POS
+	var cyl := CylinderShape3D.new()
+	cyl.radius = CARRY_RADIUS
+	cyl.height = Slot.CRATE_SIZE.y * CARRY_SCALE
+	_carry_shape.shape = cyl
+	_carry_shape.position = CARRY_FROM
 	_carry_shape.disabled = true
 	add_child(_carry_shape)
+	_carry_box = BoxShape3D.new()
+	_carry_box.size = Slot.CRATE_SIZE * CARRY_SCALE
 	cam = Camera3D.new()
 	cam.position = Vector3(0, 1.62, 0)
 	cam.fov = 74
@@ -144,7 +153,21 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= GRAVITY * delta
 	move_and_slide()
+	_hold_carried()
 	_update_aim()
+
+
+## Puts the carried crate at CARRY_POS, or as far out toward it as it fits.
+func _hold_carried() -> void:
+	if not carried:
+		return
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = _carry_box
+	q.collision_mask = Vox.L_WORLD | Vox.L_SHIP | Vox.L_CRATE | Vox.L_BARRIER
+	q.transform = Transform3D(global_basis, to_global(CARRY_FROM))
+	q.motion = global_basis * (CARRY_POS - CARRY_FROM)
+	var t: float = get_world_3d().direct_space_state.cast_motion(q)[0]
+	carried.position = CARRY_FROM.lerp(CARRY_POS, t)
 
 
 func _aim_mask() -> int:
@@ -246,6 +269,7 @@ func pick_up(c: Crate) -> void:
 	c.set_carried(true)
 	carried = c
 	_carry_shape.disabled = false
+	_hold_carried()
 
 
 ## Hands the carried crate over when it's sold at an exchange.
