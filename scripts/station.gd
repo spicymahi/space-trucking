@@ -1,7 +1,7 @@
 class_name Station
 extends Node3D
 ## A station built from voxel blocks: hangar with landing pad 07 and a cargo pallet,
-## and a concourse with the commodity exchange and the (offline) contracts board.
+## and a concourse with the commodity exchange and the contract board.
 ## Local axes: +Y up, the hangar mouth faces +Z.
 
 signal terminal_used(station: Station, kind: String)

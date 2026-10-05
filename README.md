@@ -40,7 +40,7 @@ You start on foot on pad 07 at Ceres Yard, behind your ship, the Kestrel-9.
 
 The **Contract Board** is the amber terminal past the exchange in every concourse. Press **F** to use it.
 
-- Each board posts five jobs, with at least one to every other station. Pick one with **W/S** and press **F** to sign it. Its crates appear on pallet 07-B for free, with a mustard **JOB** band.
+- Each board posts five jobs, with at least one to every other station. Pick one with **W/S** and press **F** to sign it. Its crates appear on pallet 07-B for free, with a cream **JOB** band. The sign line shows how much room your hold has left once your other jobs are aboard, and warns when a job won't fit.
 - Load them into your hold like any cargo and fly to the job's destination. The route printer marks job destinations with `*`.
 - At the destination's contract board, press **F** on the job to deliver it. Every crate must be there: in your hands, on pallet 07-B, or in your docked hold. The dock crew charges 10% of the hold crates' share of the pay.
 - Job crates belong to the client. The exchange won't buy them.

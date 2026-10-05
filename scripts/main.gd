@@ -65,6 +65,8 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	if "--selftest" in args:
 		_selftest.call_deferred()
+	elif "--selftest-depart" in args:
+		_selftest_depart.call_deferred()
 	elif "--capture" in args:
 		_capture.call_deferred()
 
@@ -589,11 +591,27 @@ func _selftest() -> void:
 	walked = walked and await _walk_to(tharsis.to_global(Vector3(0, 0, -62))) and await _walk_to(tharsis.to_global(Vector3(4.6, 0, -80)))
 	await _aim_use(tharsis.to_global(Vector3(6.6, 1.2, -80)))
 	ok = _check(walked and mode == "terminal" and board.visible and board.selected()["job"]["id"] == job_id, "walked to the Tharsis contract board; it opens on job %d" % job_id) and ok
-	var fee := board.delivery_fee(job, n_job - 1)
+	# Crew fee: 10% of the hold crates' share of the pay.
+	var fee := roundi(float(job["reward"]) * (n_job - 1) / n_job * 0.10)
 	before = GameState.credits
 	await _press_key(KEY_F)
 	ok = _check(GameState.credits - before == job["reward"] - fee and (n_job == 1 or fee > 0), "F delivers job %d: paid %d cr (dock crew fee %d on the %d in the hold)" % [job_id, GameState.credits - before, fee, n_job - 1]) and ok
 	ok = _check(GameState.jobs.is_empty() and ship.hold_count() == 0 and Slot.count_job(tp, job_id) == 0, "the job is closed and its crates are gone from the pallet and hold") and ok
+	await _press_key(KEY_F)
+	ok = _check(GameState.jobs.is_empty() and board.sel == 0, "a double-tapped F right after delivering doesn't sign the next offer") and ok
+	await _frames(30)
+
+	# Board turnover while it's open: the oldest offer goes, a new one posts,
+	# and the cursor stays on the job you were looking at.
+	await _press_key(KEY_S)
+	await _press_key(KEY_S)
+	var watched: int = board.selected()["job"]["id"]
+	var oldest: int = GameState.offers["tharsis_ring"][0]["id"]
+	GameState.turnover_enabled = true
+	GameState._turnover = 0.0
+	await _frames(2)
+	GameState.turnover_enabled = false
+	ok = _check(not GameState.offers["tharsis_ring"].any(func(o): return o["id"] == oldest) and board.selected()["job"]["id"] == watched, "when offers turn over, the cursor stays on job %d" % watched) and ok
 
 	# Abandoning: sign the first posted job, then R twice cancels it for a penalty.
 	guard = 0
@@ -612,8 +630,93 @@ func _selftest() -> void:
 	await _press_key(KEY_ESCAPE)
 	ok = _check(GameState.credits > start, "profit on the run: %d -> %d cr" % [start, GameState.credits]) and ok
 
+	ok = await _departure_test() and ok
+
 	print("SELFTEST " + ("OK" if ok else "FAILED"))
 	get_tree().quit(0 if ok else 1)
+
+
+## Runs only the departure check, for quick iteration on flight code.
+func _selftest_depart() -> void:
+	await _frames(30)
+	var ok := await _departure_test()
+	print("SELFTEST " + ("OK" if ok else "FAILED"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Departing on a course that leads back past the station you left: Vesta
+## Forge to Europa Deep, flown on the keys from the pad.
+func _departure_test() -> bool:
+	var ok := true
+	var vesta: Station = stations["vesta_forge"]
+	var europa: Station = stations["europa_deep"]
+	ship.place_landed(vesta)
+	player.global_position = ship.to_global(Vector3(0, 0.3, -5.2))
+	await _frames(3)
+	await _aim_use(ship.to_global(Vector3(0, 1.3, -7.9)))
+	await _press_key(KEY_N)
+	await _press_key(KEY_X)
+	var eg := GameState.station_grid("europa_deep")
+	for v in [eg.x, eg.y, eg.z]:
+		var field := GameState.format_grid(v)
+		if field.begins_with("-"):
+			await _press_key(KEY_MINUS)
+		for ch in field.substr(1):
+			await _press_key(KEY_0 + int(ch))
+	await _press_key(KEY_ENTER)
+	await _press_key(KEY_N)
+	ok = _check(mode == "pilot" and ship.course_station == "europa_deep", "at Vesta Forge: boarded and keyed in Europa Deep's grid (%s %s %s)" % [GameState.format_grid(eg.x), GameState.format_grid(eg.y), GameState.format_grid(eg.z)]) and ok
+	# A short burst of up thrust lifts the gear clear of the mouth's sill
+	# without reaching the lintel, then W flies straight out.
+	Input.action_press("thrust_up")
+	await _frames(24)
+	Input.action_release("thrust_up")
+	await _frames(30)
+	Input.action_press("throttle_up")
+	var t_out := 0
+	while ship.global_position.distance_to(vesta.global_position) < 1700.0 and t_out < 60 * 60:
+		await get_tree().physics_frame
+		t_out += 1
+	Input.action_release("throttle_up")
+	ok = _check(ship.state == Ship.State.FLYING and ship.global_position.distance_to(vesta.global_position) >= 1700.0, "Space lifts off and W flies out of the Vesta hangar mouth, 1.7 km clear") and ok
+	var aimed := await _steer_to(europa.global_position)
+	ok = _check(aimed, "the arrow keys turn the nose round to the Europa Deep marker, behind the station") and ok
+	await _press_key(KEY_C)
+	var min_vesta := INF
+	var on_frames := 0
+	while ship.cruise and on_frames < 60 * 40:
+		await get_tree().physics_frame
+		on_frames += 1
+		min_vesta = minf(min_vesta, ship.global_position.distance_to(vesta.global_position))
+	await _frames(150)
+	var e_d := ship.global_position.distance_to(europa.global_position)
+	ok = _check(on_frames > 180 and min_vesta < 1500.0, "cruise stays on as the course passes back by Vesta Forge (closest %.0f m, on for %.1f s)" % [min_vesta, on_frames / 60.0]) and ok
+	ok = _check(not ship.cruise and e_d < 1500.0 and e_d > 300.0, "and drops out near Europa Deep, stopping %.0f m out" % e_d) and ok
+
+	return ok
+
+
+## Turns the nose toward a point with the pitch and yaw keys, like a pilot would.
+func _steer_to(p: Vector3, max_frames := 1200) -> bool:
+	var done := false
+	for f in max_frames:
+		var d := (ship.global_basis.inverse() * (p - ship.global_position)).normalized()
+		if d.z < 0.0 and Vector2(d.x, d.y).length() < 0.03:
+			done = true
+			break
+		var yaw := d.x if d.z < 0.0 else (1.0 if d.x >= 0.0 else -1.0)
+		var pitch := d.y if d.z < 0.0 else 0.0
+		for a in ["yaw_left", "yaw_right", "pitch_up", "pitch_down"]:
+			Input.action_release(a)
+		if absf(yaw) > 0.01:
+			Input.action_press("yaw_right" if yaw > 0.0 else "yaw_left", clampf(absf(yaw) * 3.0, 0.15, 1.0))
+		if absf(pitch) > 0.01:
+			Input.action_press("pitch_up" if pitch > 0.0 else "pitch_down", clampf(absf(pitch) * 3.0, 0.15, 1.0))
+		await get_tree().physics_frame
+	for a in ["yaw_left", "yaw_right", "pitch_up", "pitch_down"]:
+		Input.action_release(a)
+	await _frames(30)
+	return done
 
 
 ## Teleports beside Ceres pallet 07-B, lifts the crate in pallet slot i by aiming
@@ -670,13 +773,14 @@ func _capture() -> void:
 	_on_terminal(ceres, "contracts")
 	hud.contracts.sign_job(GameState.offers["ceres_yard"][1]["id"])
 	hud.contracts._refresh()
-	await _shot("13_contract_board")
+	await _shot("15_contract_board")
 	hud.contracts.close()
 	player.set_physics_process(false)
 	_look_from(ceres.to_global(Vector3(31, 0, 9)), ceres.to_global(Vector3(24, 1.0, 2.6)))
-	await _shot("14_job_crates")
+	await _shot("16_job_crates")
 	# Hand the job back so the loading shots show your own ice.
 	_on_terminal(ceres, "contracts")
+	hud.contracts.select_job(GameState.jobs[0]["id"])
 	hud.contracts.abandon_selected()
 	hud.contracts.abandon_selected()
 	hud.contracts.close()

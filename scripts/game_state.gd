@@ -123,6 +123,8 @@ var offers: Dictionary = {}
 var jobs: Array[Dictionary] = []
 var _next_job := 11
 var _turnover := OFFER_TURNOVER
+## Off under the self-test, so its seeded boards don't re-roll mid-run.
+var turnover_enabled := true
 
 var font_crt: Font
 var font_label: Font
@@ -133,6 +135,7 @@ func _ready() -> void:
 	# Fixed seed under the self-test so its job boards are the same every run.
 	if "--selftest" in OS.get_cmdline_user_args():
 		rng.seed = 42
+		turnover_enabled = false
 	else:
 		rng.randomize()
 	for id in STATIONS:
@@ -151,6 +154,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if not turnover_enabled:
+		return
 	_turnover -= delta
 	if _turnover <= 0.0:
 		_turnover = OFFER_TURNOVER
@@ -343,7 +348,8 @@ func abandon_job(job_id: int) -> int:
 	if j.is_empty():
 		return 0
 	jobs.erase(j)
-	var penalty := int(round(j["reward"] * ABANDON_PENALTY))
+	# Never takes you below zero.
+	var penalty := mini(int(round(j["reward"] * ABANDON_PENALTY)), maxi(0, credits))
 	pay_fee(penalty)
 	return penalty
 

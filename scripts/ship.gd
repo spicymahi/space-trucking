@@ -22,6 +22,9 @@ const TURN := Vector3(1.1, 0.9, 1.8)
 const LAND_MAX_SPEED := 14.0
 const DOCK_RANGE := 5000.0
 const CRUISE_MIN_DIST := 1500.0
+## Cruise ignores the station you just left until you're this far out, since
+## a course behind it leads back past it.
+const DEPART_CLEAR := 3000.0
 const RAMP_LEN := 8.0
 const RAMP_HINGE := Vector3(0, 0.3, 16)
 const CAM_POS := Vector3(0, 2.55, -9.0)
@@ -40,6 +43,7 @@ var cruise := false
 var ang := Vector3.ZERO
 var mouse_turn := Vector2.ZERO
 var landed_at: Station = null
+var departed_from: Station = null
 var stations: Array[Station] = []
 var hold_slots: Array[Slot] = []
 var course_target = null # Vector3 or null
@@ -269,6 +273,7 @@ func _set_landed(st: Station) -> void:
 	ang = Vector3.ZERO
 	cruise = false
 	landed_at = st
+	departed_from = null
 	_set_ramp(true)
 	_set_engines(false)
 	comms = st.display_name.to_upper() + " PAD 07 · LANDED"
@@ -278,6 +283,7 @@ func _set_landed(st: Station) -> void:
 func take_off() -> void:
 	if landed_at:
 		landed_at.docking_granted = false
+	departed_from = landed_at
 	landed_at = null
 	state = State.FLYING
 	_set_ramp(false)
@@ -457,6 +463,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _fly(delta: float) -> void:
+	if departed_from and global_position.distance_to(departed_from.global_position) > DEPART_CLEAR:
+		departed_from = null
 	var fwd := 0.0
 	var strafe := 0.0
 	var vert := 0.0
@@ -488,7 +496,8 @@ func _fly(delta: float) -> void:
 			# Drop out near the course target, or near a station we are closing on,
 			# never near the one we are leaving.
 			var st := nearest_station()
-			var near_st := st != null and global_position.distance_to(st.global_position) < CRUISE_DROP_DIST \
+			var near_st := st != null and st != departed_from \
+				and global_position.distance_to(st.global_position) < CRUISE_DROP_DIST \
 				and velocity.dot(st.global_position - global_position) > 0.0
 			var near_target: bool = course_target != null and global_position.distance_to(course_target) < CRUISE_DROP_DIST
 			if near_st or near_target:

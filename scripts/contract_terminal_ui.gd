@@ -18,6 +18,10 @@ var stations: Array = []
 var sel := 0
 var message := ""
 var _confirm_abandon := 0
+## The job id the cursor is on, so offers turning over don't move it.
+var _sel_id := 0
+## F is ignored briefly after a delivery or abandon, so a double tap can't sign a job.
+var _use_lock := 0.0
 var _text: RichTextLabel
 var _hint: Label
 
@@ -89,12 +93,35 @@ func _init() -> void:
 func _on_board_changed(station_id: String) -> void:
 	if not visible or station == null or station_id != station.station_id:
 		return
-	var id: int = selected().get("job", {}).get("id", 0)
+	if not select_job(_sel_id):
+		_confirm_abandon = 0
+		message = "OFFER #%d WAS TAKEN DOWN. NEW JOBS POSTED." % _sel_id
+	_refresh()
+
+
+func _process(delta: float) -> void:
+	_use_lock = maxf(0.0, _use_lock - delta)
+
+
+## Puts the cursor on a job by id. Returns false if it isn't on the board.
+func select_job(id: int) -> bool:
 	var rows := entries()
 	for i in rows.size():
 		if rows[i]["job"]["id"] == id:
 			sel = i
-	_refresh()
+			return true
+	return false
+
+
+## After a job leaves your list: the next signed job, else the first offer.
+func _reseat_cursor() -> void:
+	var rows := entries()
+	sel = 0
+	for i in rows.size():
+		if rows[i]["signed"]:
+			sel = i
+			break
+	_use_lock = 0.3
 
 
 func open(st: Station, p_ship: Ship, p_player: Player, p_stations: Array) -> void:
@@ -188,6 +215,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Signs the selected offer, or delivers the selected job. Returns credits earned.
 func use_selected() -> int:
 	_confirm_abandon = 0
+	if _use_lock > 0.0:
+		return 0
 	var row := selected()
 	if row.is_empty():
 		return 0
@@ -211,15 +240,23 @@ func sign_job(id: int) -> bool:
 	if free < offer["crates"]:
 		message = "PALLET 07-B HAS ROOM FOR %d. THIS JOB NEEDS %d. LOAD YOUR HOLD FIRST." % [free, offer["crates"]]
 		return false
+	var room := hold_room()
 	var j := GameState.accept_job(station.station_id, id)
 	station.spawn_on_pallet(j["commodity"], j["crates"], j["id"])
 	message = "JOB %d SIGNED. %d CRATE%s ON PALLET 07-B FOR %s." % [j["id"], j["crates"], "" if j["crates"] == 1 else "S", GameState.station_name(j["dest"]).to_upper()]
+	if j["crates"] > room:
+		message += "\nWARNING: YOUR HOLD HAS ROOM FOR %d MORE." % maxi(0, room)
 	# Keep the cursor on the job you just signed, now in your list.
-	var rows := entries()
-	for i in rows.size():
-		if rows[i]["signed"] and rows[i]["job"]["id"] == j["id"]:
-			sel = i
+	select_job(j["id"])
 	return true
+
+
+## Hold slots left once every signed job's crates are aboard.
+func hold_room() -> int:
+	var room := ship.hold_slots.size() - ship.hold_count()
+	for j in GameState.jobs:
+		room -= j["crates"] - Slot.count_job(ship.hold_slots, j["id"])
+	return room
 
 
 ## Delivers a job here if all its crates are here. Returns credits earned.
@@ -243,7 +280,7 @@ func deliver(id: int) -> int:
 		Slot.take_job(ship.hold_slots, id)
 	var earned := GameState.complete_job(id, fee)
 	message = "JOB %d DELIVERED. PAID %s CR%s." % [id, GameState.money(earned), (" (DOCK CREW FEE %s)" % GameState.money(fee)) if fee > 0 else ""]
-	sel = clampi(sel, 0, entries().size() - 1)
+	_reseat_cursor()
 	return earned
 
 
@@ -267,7 +304,7 @@ func abandon_selected() -> int:
 		Slot.take_job(st.pallet_slots, j["id"])
 	var penalty := GameState.abandon_job(j["id"])
 	message = "JOB %d ABANDONED. PENALTY %s CR." % [j["id"], GameState.money(penalty)]
-	sel = clampi(sel, 0, entries().size() - 1)
+	_reseat_cursor()
 	return penalty
 
 
@@ -315,7 +352,8 @@ func _refresh() -> void:
 		var j: Dictionary = row["job"]
 		t += "%s: %d CRATE%s OF %s TO %s.\n" % [String(j["client"]).to_upper(), j["crates"], "" if j["crates"] == 1 else "S", String(GameState.COMMODITIES[j["commodity"]]["name"]).to_upper(), GameState.station_name(j["dest"]).to_upper()]
 		if not row["signed"]:
-			t += "%s SIGN · CRATES GO TO PALLET 07-B · PAD SPACE %d\n" % [_kbd(_key_use()), station.free_pallet_slots().size()]
+			var room := hold_room()
+			t += "%s SIGN · TO PALLET 07-B · PAD SPACE %d · HOLD ROOM %d%s\n" % [_kbd(_key_use()), station.free_pallet_slots().size(), maxi(0, room), "  TOO SMALL" if j["crates"] > room else ""]
 		elif j["dest"] == sid:
 			var k := job_counts(j["id"])
 			var fee := delivery_fee(j, k["hold"])
@@ -324,6 +362,7 @@ func _refresh() -> void:
 			t += "DELIVER AT %s · %s ABANDON\n" % [GameState.station_name(j["dest"]).to_upper(), _kbd(_key_alt())]
 	t += message
 	_text.text = t
+	_sel_id = row["job"]["id"] if not row.is_empty() else 0
 	var g := GameState.using_gamepad
 	_hint.text = ("D-pad select · A sign or deliver · X abandon · B close" if g
 		else "W/S select · F sign or deliver · R abandon · Esc close")
