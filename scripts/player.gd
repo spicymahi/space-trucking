@@ -7,23 +7,46 @@ const WALK := 5.0
 const SPRINT := 8.5
 const GRAVITY := 18.0
 const REACH := 4.0
+## On a pallet, a full stack doesn't hide the free one behind it: you reach this much further past it,
+## and a free stack up to REACH_HINT beyond that gets a "step closer" prompt.
+const REACH_PAST := 1.0
+const REACH_HINT := 2.0
 const LOOK_SENS := 0.0025
 const STICK_LOOK := 2.6
-## A carried crate is held at waist height, front right of you (yaw only, so it never hides your aim), and becomes
-## part of your collision, so it can't pass through walls, crates or the ramp.
+## A carried crate is held at waist height, front right of you (yaw only, so it never hides your aim).
+## When a wall or another crate is in the way, it's drawn in toward you at once instead of passing
+## through, and it eases back out at CARRY_EASE (m/s) when the way clears.
 const CARRY_POS := Vector3(0.8, 1.0, -1.3)
+const CARRY_FROM := Vector3(0, 0.95, 0) # drawn in at waist height, above the cockpit desk and seat
 const CARRY_SCALE := 0.45
+const CARRY_EASE := 6.0
+## While carrying, a round collider at crate height keeps walls far enough away that the crate always
+## fits beside you: its radius is the carried crate's half-diagonal plus 2 cm. It's round and centred,
+## so turning never shoves you, and a doorway only needs you roughly centred in it.
+const CARRY_RADIUS := sqrt(Slot.CRATE_SIZE.x * Slot.CRATE_SIZE.x + Slot.CRATE_SIZE.z * Slot.CRATE_SIZE.z) * CARRY_SCALE / 2 + 0.02
+const CARRY_MASK := Vox.L_WORLD | Vox.L_SHIP | Vox.L_CRATE | Vox.L_BARRIER
+## Lifting a crate up close steps you back, up to LIFT_ROOM at LIFT_STEP (m/s), until that collider fits.
+const LIFT_ROOM := 0.55
+const LIFT_STEP := 6.0
+const NO_ROOM := "No room to lift here. Step into the open first."
 
 var active := true
 var cam: Camera3D
 var ray: RayCast3D
 var carried: Crate = null
 var prompt := ""
+var prompt_is_action := false # F does what the prompt says
 var _pitch := 0.0
 var _ghost: MeshInstance3D
 var _tool: Node3D
 var _beam: MeshInstance3D
 var _carry_shape: CollisionShape3D
+var _carry_box: BoxShape3D
+var _carry_t := 1.0 # where the carried crate is, from CARRY_FROM (0) out to CARRY_POS (1)
+var _lifting: Crate = null # the crate you're stepping back to make room for
+var _lift_to := Vector3.ZERO
+var _lift_frames := 0
+var _out_of_reach := false # a free pallet stack is behind the full one you're aiming at, but too far
 
 
 func build() -> void:
@@ -42,12 +65,15 @@ func build() -> void:
 	cs.position.y = 0.9
 	add_child(cs)
 	_carry_shape = CollisionShape3D.new()
-	var cb := BoxShape3D.new()
-	cb.size = Slot.CRATE_SIZE * CARRY_SCALE
-	_carry_shape.shape = cb
-	_carry_shape.position = CARRY_POS
+	var cyl := CylinderShape3D.new()
+	cyl.radius = CARRY_RADIUS
+	cyl.height = Slot.CRATE_SIZE.y * CARRY_SCALE
+	_carry_shape.shape = cyl
+	_carry_shape.position = CARRY_FROM
 	_carry_shape.disabled = true
 	add_child(_carry_shape)
+	_carry_box = BoxShape3D.new()
+	_carry_box.size = Slot.CRATE_SIZE * CARRY_SCALE
 	cam = Camera3D.new()
 	cam.position = Vector3(0, 1.62, 0)
 	cam.fov = 74
@@ -129,6 +155,7 @@ func _look(d: Vector2) -> void:
 	rotate_y(-d.x)
 	_pitch = clampf(_pitch - d.y, deg_to_rad(-85), deg_to_rad(85))
 	cam.rotation.x = _pitch
+	_hold_carried() # a mouse turn between physics ticks mustn't swing the crate into a wall
 
 
 func _physics_process(delta: float) -> void:
@@ -139,14 +166,71 @@ func _physics_process(delta: float) -> void:
 	var dir := (global_basis * Vector3(input.x, 0, input.y))
 	dir.y = 0
 	var speed := SPRINT if Input.is_action_pressed("sprint") else WALK
+	if _lifting:
+		dir = _lift_to - global_position
+		dir.y = 0
+		speed = minf(LIFT_STEP, dir.length() / delta)
+		dir = dir.normalized()
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	if is_on_floor():
 		velocity.y = -0.5
 	else:
 		velocity.y -= GRAVITY * delta
+	var from := global_transform
+	var v := velocity
 	move_and_slide()
+	# The carry collider stops you like a wall but never holds you up. If it caught an edge or a sloped
+	# top (the cockpit desk's instruments), take the step again with that contact as a wall; on a third
+	# try, stand still, and if it still lifts you (it started inside something), keep only the level push.
+	for i in 3:
+		var back := _carry_floor_contact()
+		if back == Vector3.ZERO:
+			break
+		global_transform = from
+		v -= back * minf(v.dot(back), 0.0)
+		velocity = v if i < 2 else Vector3(0, v.y, 0)
+		move_and_slide()
+		if i == 2 and _carry_floor_contact() != Vector3.ZERO:
+			global_position.y = minf(global_position.y, from.origin.y)
+	if _lifting:
+		_continue_lift()
+	_hold_carried(delta)
 	_update_aim()
+
+
+## Puts the carried crate at CARRY_POS, or as far out toward it as it fits: drawn in at once, eased
+## back out over time. With no delta it only draws the crate in.
+func _hold_carried(delta := 0.0) -> void:
+	if not carried:
+		return
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = _carry_box
+	q.collision_mask = CARRY_MASK
+	q.transform = Transform3D(global_basis, to_global(CARRY_FROM))
+	q.motion = global_basis * (CARRY_POS - CARRY_FROM)
+	var t: float = get_world_3d().direct_space_state.cast_motion(q)[0]
+	_carry_t = minf(t, move_toward(_carry_t, t, CARRY_EASE * delta / (CARRY_POS - CARRY_FROM).length()))
+	carried.position = CARRY_FROM.lerp(CARRY_POS, _carry_t)
+
+
+## After a move: if the carry collider is touching something it could stand on (a floor contact), the
+## level direction back away from it. Zero otherwise.
+func _carry_floor_contact() -> Vector3:
+	if _carry_shape.disabled:
+		return Vector3.ZERO
+	for j in get_slide_collision_count():
+		var col := get_slide_collision(j)
+		for i in col.get_collision_count():
+			if col.get_local_shape(i) != _carry_shape or col.get_angle(i, up_direction) > floor_max_angle + 0.01:
+				continue
+			var back := col.get_normal(i)
+			back.y = 0
+			if back.length() < 0.05: # resting flat on top of something: back away from where it touches
+				back = global_position - col.get_position(i)
+				back.y = 0
+			return back.normalized() if back.length() > 0.001 else global_basis.z
+	return Vector3.ZERO
 
 
 func _aim_mask() -> int:
@@ -179,6 +263,51 @@ static func stack_top(c: Crate) -> Crate:
 	return c
 
 
+## Every slot in the stack a hit slot or crate belongs to, bottom first.
+static func stack_slots(hit: Object) -> Array[Slot]:
+	var out: Array[Slot] = []
+	var s: Slot = hit if hit is Slot else (hit.slot if hit is Crate else null)
+	if s == null:
+		return out
+	while s.below:
+		s = s.below
+	while s:
+		out.append(s)
+		s = s.above
+	return out
+
+
+## While carrying: the slot F would fill. On a pallet, a full stack doesn't hide a free one behind it,
+## so you can reach past the outer stacks to the middle. A free stack just beyond that reach sets
+## _out_of_reach instead.
+func _carry_target(hit: Object) -> Slot:
+	_out_of_reach = false
+	var target := stack_target(hit)
+	var stack := stack_slots(hit)
+	if target or stack.is_empty() or stack[0].kind != "pallet":
+		return target
+	ray.target_position = Vector3(0, 0, -(REACH + REACH_PAST + REACH_HINT))
+	for _i in 3: # a pallet is 3 stacks deep
+		for s in stack:
+			ray.add_exception(s)
+			if s.occupant:
+				ray.add_exception(s.occupant)
+		ray.force_raycast_update()
+		hit = ray.get_collider() if ray.is_colliding() else null
+		stack = stack_slots(hit)
+		if stack.is_empty() or stack[0].kind != "pallet":
+			break
+		target = stack_target(hit)
+		if target:
+			if cam.global_position.distance_to(ray.get_collision_point()) > REACH + REACH_PAST:
+				target = null
+				_out_of_reach = true
+			break
+	ray.target_position = Vector3(0, 0, -REACH)
+	ray.clear_exceptions()
+	return target
+
+
 func _update_aim() -> void:
 	ray.collision_mask = _aim_mask()
 	ray.force_raycast_update()
@@ -186,19 +315,25 @@ func _update_aim() -> void:
 	_ghost.visible = false
 	_beam.visible = carried != null
 	prompt = ""
+	prompt_is_action = true
 	if carried:
 		_update_beam()
-		var target := stack_target(hit)
+		var target := _carry_target(hit)
 		if target:
 			_ghost.global_transform = target.global_transform
 			_ghost.visible = true
 			prompt = "Place crate in " + target.describe()
+		elif _out_of_reach:
+			prompt = "Out of reach · step closer"
+			prompt_is_action = false
 		elif hit is Slot or hit is Crate:
 			prompt = "That stack is full"
+			prompt_is_action = false
 		elif hit is Interactable:
 			prompt = hit.prompt
 		else:
 			prompt = "Aim at a slot or a crate in your hold or on the pallet"
+			prompt_is_action = false
 	elif hit is Crate:
 		var top := stack_top(hit)
 		if top != hit:
@@ -220,15 +355,19 @@ func _update_beam() -> void:
 
 
 func use() -> void:
+	if _lifting:
+		return
 	ray.collision_mask = _aim_mask()
 	ray.force_raycast_update()
 	var hit := ray.get_collider() if ray.is_colliding() else null
 	if carried:
-		var target := stack_target(hit)
+		var target := _carry_target(hit)
 		if target:
 			place(target)
 		elif hit is Interactable:
 			hit.interact(self)
+		elif _out_of_reach:
+			GameState.say("That stack is out of reach. Step closer.")
 		elif hit is Slot or hit is Crate:
 			GameState.say("That stack is full. Try another slot.")
 		else:
@@ -240,7 +379,35 @@ func use() -> void:
 		hit.interact(self)
 
 
+## Lifts crate c. Up close, the carry collider wouldn't fit yet, so you step back first; with no room
+## nearby (a tight corner), you're told so and keep your hands free.
 func pick_up(c: Crate) -> void:
+	var room := _room_to_lift(c)
+	if not room.is_finite():
+		GameState.say(NO_ROOM)
+	elif room.is_equal_approx(global_position):
+		_take(c)
+	else:
+		_lifting = c
+		_lift_to = room
+		_lift_frames = 0
+
+
+## Each physics frame while stepping back: lift the crate once the carry collider fits, or give up.
+func _continue_lift() -> void:
+	var c := _lifting
+	_lift_frames += 1
+	if not is_instance_valid(c) or c.slot == null:
+		_lifting = null
+	elif _carry_fits(global_position, c):
+		_lifting = null
+		_take(c)
+	elif _lift_frames > 15:
+		_lifting = null
+		GameState.say(NO_ROOM)
+
+
+func _take(c: Crate) -> void:
 	c.remove_from_slot()
 	c.get_parent().remove_child(c)
 	add_child(c)
@@ -248,6 +415,35 @@ func pick_up(c: Crate) -> void:
 	c.set_carried(true)
 	carried = c
 	_carry_shape.disabled = false
+	_carry_t = 1.0
+	_hold_carried()
+
+
+## Whether the carry collider would fit with you standing at `at`, not counting crate c (the one you lift).
+func _carry_fits(at: Vector3, c: Crate) -> bool:
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = _carry_shape.shape
+	q.collision_mask = CARRY_MASK
+	q.transform = Transform3D(Basis.IDENTITY, at + Vector3(0, CARRY_FROM.y, 0))
+	q.exclude = [c.get_rid()]
+	return get_world_3d().direct_space_state.intersect_shape(q, 1).is_empty()
+
+
+## The nearest spot within LIFT_ROOM where you'd have room to hold crate c, and a clear step to it:
+## straight back first, then fanning out to either side. Vector3.INF if there's none.
+func _room_to_lift(c: Crate) -> Vector3:
+	if _carry_fits(global_position, c):
+		return global_position
+	var back := global_basis.z
+	back.y = 0
+	back = back.normalized()
+	for step in range(1, roundi(LIFT_ROOM / 0.05) + 1): # 5 cm steps
+		for i in 16:
+			var turn := ((i + 1) >> 1) * (1 if i % 2 == 1 else -1) * TAU / 16
+			var p := global_position + back.rotated(Vector3.UP, turn) * (step * 0.05)
+			if _carry_fits(p, c) and not test_move(global_transform, p - global_position):
+				return p
+	return Vector3.INF
 
 
 ## Hands the carried crate over when it's sold at an exchange.

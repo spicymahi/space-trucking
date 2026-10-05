@@ -268,7 +268,7 @@ func _process(delta: float) -> void:
 	_prompt.visible = mode == "foot" and player.prompt != ""
 	if _prompt.visible:
 		var key := "A" if g else "F"
-		_prompt.text = ("[%s]  " % key) + player.prompt if not player.prompt.begins_with("Aim") and not player.prompt.ends_with("full") else player.prompt
+		_prompt.text = ("[%s]  " % key) + player.prompt if player.prompt_is_action else player.prompt
 	if _wrist.visible:
 		var where := "IN TRANSIT"
 		if ship.landed_at:
