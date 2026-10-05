@@ -25,7 +25,7 @@ You start on foot on pad 07 at Ceres Yard, behind your ship, the Kestrel-9.
 3. Walk back to the hangar. Aim at a crate and press **F** to lift it with your tractor tool, then aim into your ship's hold and press **F** again to set it down. A green ghost shows where it will go.
    - Aim at a crate that's already down to stack the new one on top of it. The hold and the pallet both take two layers.
    - Lifting from a stack always takes the top crate.
-   - Aiming at a full stack reaches past it to the stack behind, so you can fill the middle of the pallet too.
+   - On the pallet, aiming at a full stack reaches past it to the stack behind, so you can fill the middle too. Stand close to the pallet for that.
 4. Walk to the front of the ship and press **F** at the pilot seat.
 5. Press **N** for the nav computer, then press **DIR** (or **Tab**) to swing over to the route printer on its left. From the seat you can also press **M** to go straight there.
    - Pick **Tharsis Ring** with **W/S** and press **F** to print. The route slip clips onto the board to the right of the keypad, and the view returns to the keypad.

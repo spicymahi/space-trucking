@@ -31,6 +31,9 @@ var mode := "foot" # foot, pilot, terminal
 var bought_once := false
 var _carry_clips := 0 # self-test: frames a carried crate spent inside something
 var _carry_clip_at := ""
+var _carry_jumps := 0 # self-test: frames a carried crate moved out faster than it eases
+var _carry_out := -1.0 # how far out the carried crate was last frame (-1: not watching)
+var _carry_lifts := 0 # self-test: frames the crate's collider held you up off the floor
 
 
 func _ready() -> void:
@@ -239,14 +242,15 @@ func _frames(n: int) -> void:
 		await get_tree().physics_frame
 
 
-## Steers the player toward a point with the walk input, like a person holding W.
-func _walk_to(target: Vector3, max_frames := 900) -> bool:
+## Steers the player toward a point with the walk input, like a person holding W, until within `near`.
+func _walk_to(target: Vector3, max_frames := 900, near := 0.6) -> bool:
 	Input.action_press("move_forward")
 	var reached := false
+	_carry_out = -1.0
 	for f in max_frames:
 		var d := target - player.global_position
 		d.y = 0
-		if d.length() < 0.6:
+		if d.length() < near:
 			reached = true
 			break
 		player.rotation.y = atan2(-d.x, -d.z)
@@ -257,11 +261,26 @@ func _walk_to(target: Vector3, max_frames := 900) -> bool:
 	return reached
 
 
-## Counts frames where the carried crate overlaps a wall, the ship or another crate (2 cm grace).
+## Walks through each point in turn (all of them, even after a miss). Whether every one was reached.
+func _walk_path(points: Array, near := 0.6) -> bool:
+	var all := true
+	for p in points:
+		all = await _walk_to(p, 900, near) and all
+	return all
+
+
+## Counts frames where the carried crate overlaps a wall, the ship or another crate (2 cm grace),
+## frames where it moved out faster than it eases (it may only be drawn in at once), and frames where
+## you stand more than 3 cm above the ground under your feet (held up by the crate's collider).
 func _note_carried_clear() -> void:
 	var c := player.carried
 	if c == null:
+		_carry_out = -1.0
 		return
+	var out := c.position.distance_to(Player.CARRY_FROM)
+	if _carry_out >= 0.0 and out - _carry_out > Player.CARRY_EASE / Engine.physics_ticks_per_second + 0.01:
+		_carry_jumps += 1
+	_carry_out = out
 	var box := BoxShape3D.new()
 	box.size = Slot.CRATE_SIZE * Player.CARRY_SCALE - Vector3.ONE * 0.04
 	var q := PhysicsShapeQueryParameters3D.new()
@@ -273,6 +292,11 @@ func _note_carried_clear() -> void:
 		_carry_clips += 1
 		if _carry_clip_at == "":
 			_carry_clip_at = " (first: into %s)" % hits[0].collider.name
+	var feet := player.global_position
+	var down := PhysicsRayQueryParameters3D.create(feet + Vector3.UP * 0.2, feet + Vector3.DOWN, q.collision_mask, [player.get_rid()])
+	var ground := get_world_3d().direct_space_state.intersect_ray(down)
+	if player.is_on_floor() and not ground.is_empty() and feet.y - ground.position.y > 0.03:
+		_carry_lifts += 1
 
 
 func _aim_at(p: Vector3) -> void:
@@ -287,6 +311,29 @@ func _aim_at(p: Vector3) -> void:
 func _aim_use(p: Vector3) -> void:
 	await _aim_at(p)
 	await _press_key(KEY_F)
+
+
+## Presses and releases a physical key, then keeps watching for a while. Returns the furthest the
+## camera moved in any one physics frame.
+func _press_key_watching(k: Key, frames := 16) -> float:
+	var e := InputEventKey.new()
+	e.physical_keycode = k
+	e.keycode = k
+	e.pressed = true
+	Input.parse_input_event(e)
+	_carry_out = -1.0
+	var last := player.cam.global_position
+	var biggest := 0.0
+	for f in frames:
+		await get_tree().physics_frame
+		_note_carried_clear()
+		biggest = maxf(biggest, player.cam.global_position.distance_to(last))
+		last = player.cam.global_position
+		if f == 1:
+			var u := e.duplicate()
+			u.pressed = false
+			Input.parse_input_event(u)
+	return biggest
 
 
 ## Presses and releases a physical key.
@@ -348,6 +395,7 @@ func _selftest() -> void:
 	# Turning on the spot against the wall: the crate swings round without being
 	# pushed into the wall, and it doesn't shove you around either.
 	var at_wall := player.global_position
+	_carry_out = -1.0
 	for turn in ["look_left", "look_right"]:
 		Input.action_press(turn)
 		for f in 50:
@@ -357,13 +405,45 @@ func _selftest() -> void:
 	await _frames(2)
 	var shoved := player.global_position.distance_to(at_wall)
 	ok = _check(shoved < 0.05 and _carry_clips == 0, "turning against the wall with a crate doesn't shove you (moved %.2f m) or put the crate in the wall%s" % [shoved, _carry_clip_at]) and ok
+	# A mouse turn lands between physics frames, so the crate must follow it at once. Turn away from the
+	# wall with the stick and let the crate swing out, then flick back toward the wall with the mouse.
+	# (Headless Godot can't capture the mouse, so this calls the mouse-look handler directly, once per
+	# motion event of 60 px.)
+	Input.action_press("look_right")
+	for f in 66:
+		if f == 36:
+			Input.action_release("look_right")
+		await get_tree().physics_frame
+		_note_carried_clear()
+	var flick_clips := _carry_clips
+	for i in 10:
+		player._look(Vector2(-60, 0) * Player.LOOK_SENS)
+		_note_carried_clear()
+	ok = _check(_carry_clips == flick_clips, "a mouse flick back toward the wall draws the crate in before the next physics frame (%d events left it in the wall)" % (_carry_clips - flick_clips)) and ok
 	walked = await _walk_to(ship.to_global(Vector3(0, -2, 28))) and await _walk_to(ship.to_global(Vector3(0, 0.3, 8)))
 	var in_hold := ship.to_local(player.global_position)
 	ok = _check(walked and absf(in_hold.y - 0.3) < 0.2, "walked up the ramp into the hold carrying a crate (hold floor height %.2f)" % in_hold.y) and ok
 	# Off-centre through the 2.6 m door into the cockpit and back: the crate tucks
 	# in past the door frame instead of catching on it.
-	walked = await _walk_to(ship.to_global(Vector3(0.55, 0.3, 0.5))) and await _walk_to(ship.to_global(Vector3(0.55, 0.3, -7.0)))
+	walked = await _walk_to(ship.to_global(Vector3(0.55, 0.3, 0.5))) and await _walk_to(ship.to_global(Vector3(0.55, 0.3, -6.0)))
 	ok = _check(walked and player.carried == first, "carried the crate off-centre through the door into the cockpit") and ok
+	# The crate's collider stops you like a wall but never holds you up. Push the crate into the desk in
+	# front of the seat (the route printer, the desk's left end, along its front both ways, the slip
+	# board): your feet stay on the floor, and you can always walk back out.
+	var lifts := _carry_lifts
+	var back_out := true
+	for leg in [
+		[[Vector3(-3.0, 0.3, -6.2)], Vector3(-1.9, 0.3, -10.0)],
+		[[Vector3(-3.6, 0.3, -9.0)], Vector3(-1.0, 0.3, -9.6)],
+		[[Vector3(-3.6, 0.3, -10.4)], Vector3(-1.0, 0.3, -10.4)],
+		[[Vector3(-3.6, 0.3, -9.0), Vector3(-3.0, 0.3, -6.2), Vector3(3.0, 0.3, -6.2), Vector3(3.6, 0.3, -9.0)], Vector3(-1.0, 0.3, -9.6)],
+		[[Vector3(3.0, 0.3, -6.2)], Vector3(1.08, 0.3, -10.2)],
+	]:
+		for p in leg[0]:
+			back_out = await _walk_to(ship.to_global(p), 300, 0.3) and back_out
+		await _walk_to(ship.to_global(leg[1]), 75)
+	back_out = await _walk_path([ship.to_global(Vector3(3.0, 0.3, -6.2)), ship.to_global(Vector3(0.55, 0.3, -6.0))], 0.3) and back_out
+	ok = _check(back_out and _carry_lifts == lifts, "pushing the crate into the cockpit desk from five sides never lifts you off the floor (%d frames) and you always walk back out" % (_carry_lifts - lifts)) and ok
 	await _walk_to(ship.to_global(Vector3(0.55, 0.3, 0.5)))
 	var hs := ship.hold_slots # L1-L4, R1-R4 on the floor; L5-L8, R5-R8 on top
 	await _walk_to(ship.to_global(Vector3(0, 0.3, 2.0)))
@@ -386,6 +466,12 @@ func _selftest() -> void:
 	await _fetch_from_pallet(ceres, 3, hs[1].position.z)
 	await _aim_at(ship.to_global(hs[8].position))
 	ok = _check(player.prompt == "That stack is full", "a full stack says so instead of taking the crate") and ok
+	# Only a pallet lets you reach past a full stack: in the hold you'd never see the ghost behind it.
+	walked = await _walk_path([ship.to_global(Vector3(0, 0.3, -1.6)), ship.to_global(Vector3(-3.0, 0.3, -1.6))], 0.15)
+	await _aim_at(ship.to_global(hs[0].position))
+	var aimed := player.prompt
+	walked = await _walk_path([ship.to_global(Vector3(0, 0.3, -1.6)), ship.to_global(Vector3(1.4, 0.3, hs[1].position.z))], 0.15) and walked
+	ok = _check(walked and aimed == "That stack is full", "in the hold, the full L1 stack still says it's full with room in L2 behind it (%s)" % aimed) and ok
 	await _aim_use(ship.to_global(hs[1].position))
 	ok = _check(hs[9].occupant != null and player.carried == null, "aiming at the crate in L2 stacks on it (L6)") and ok
 	var top := hs[8].occupant
@@ -393,6 +479,22 @@ func _selftest() -> void:
 	ok = _check(player.carried == top and hs[0].occupant != null, "aiming at a bottom crate lifts the one on top of it") and ok
 	await _aim_use(ship.to_global(hs[0].position))
 	ok = _check(hs[8].occupant == top, "and it stacks back on by aiming at the bottom crate") and ok
+	# Lifting up close: pressed against the L2 stack, lifting its top crate steps you back to make
+	# room for it, instead of the carry collider shoving you out in one frame.
+	walked = await _walk_to(ship.to_global(Vector3(-1.6, 0.3, hs[1].position.z)), 300, 0.08)
+	await _aim_at(ship.to_global(hs[9].position))
+	var top2 := hs[9].occupant
+	var step := await _press_key_watching(KEY_F)
+	ok = _check(walked and player.carried == top2 and step < 0.15, "pressed against the L2 stack, lifting its top crate steps you back to make room (at most %.2f m a frame)" % step) and ok
+	await _aim_use(ship.to_global(hs[1].position))
+	# The 0.8 m gap between the hold stacks and the hull is too tight to hold a crate: lifting there is
+	# refused, so you can't get wedged in, and you walk back out.
+	walked = await _walk_path([ship.to_global(Vector3(-1.5, 0.3, 6.0)), ship.to_global(Vector3(-4.5, 0.3, 6.0)), ship.to_global(Vector3(-4.5, 0.3, hs[1].position.z))], 0.15)
+	await _aim_use(ship.to_global(hs[9].position))
+	var said := hud._toast.text
+	var refused := player.carried == null and said == Player.NO_ROOM
+	walked = await _walk_path([ship.to_global(Vector3(-4.5, 0.3, 6.0)), ship.to_global(Vector3(0, 0.3, 6.0))], 0.15) and walked
+	ok = _check(walked and refused, "in the gap behind the hold stacks, lifting is refused (\"%s\") and you walk back out" % said) and ok
 	ok = _check(ship.hold_count() == 4 and ceres.pallet_count("water_ice") == 0, "4 crates in the hold, 2 stacks of 2") and ok
 
 	# Board by aiming at the seat and pressing F.
@@ -522,26 +624,37 @@ func _selftest() -> void:
 	await _press_key(KEY_ESCAPE)
 	ok = _check(GameState.credits > start, "profit on the run: %d -> %d cr" % [start, GameState.credits]) and ok
 
-	# A full pallet doesn't hide its middle: with the 8 outer stacks full, aiming
-	# at the middle with a crate in hand reaches past the stack in front of it.
+	# A full pallet doesn't hide its middle. Setup, by code: the 8 outer stacks of Tharsis pallet 07-B
+	# are filled and 3 crates go in hold slots L1-L3. Everything else is walking, aiming and F: back to
+	# the ship, then each crate from the hold down the ramp to the pallet's near side.
 	for i in tp.size():
 		if i != 4 and i != 13: # P5 and P14 make the middle stack
 			Crate.create("water_ice").place_in(tp[i])
 	for i in 3:
 		Crate.create("water_ice").place_in(hs[i])
-	await _bring_to_pallet(tharsis, hs[0])
+	walked = await _walk_path([tharsis.to_global(Vector3(0, 0, -62)), ship.to_global(Vector3(0, -2, 26)), ship.to_global(Vector3(0, 0.3, 14))])
+	walked = await _carry_to_pallet(tharsis, hs[0], 2.0) and walked
 	await _aim_at(tharsis.to_global(tp[4].position))
-	var aimed := player.prompt
+	ok = _check(walked and player.prompt == "Out of reach · step closer", "2 m back from the full pallet, aiming at its middle says to step closer (%s)" % player.prompt) and ok
+	walked = await _walk_to(tharsis.to_global(Vector3(19.4, 0, 2.6)), 300, 0.1)
+	await _aim_at(tharsis.to_global(tp[4].position))
+	var at_rim := player.prompt
 	await _press_key(KEY_F)
-	ok = _check(aimed == "Place crate in pallet slot P5" and tp[4].occupant != null and player.carried == null, "with the 8 outer pallet stacks full, aiming at the middle reaches past them and sets the crate in P5 (prompt: %s)" % aimed) and ok
-	await _bring_to_pallet(tharsis, hs[1])
+	ok = _check(walked and at_rim == "Place crate in pallet slot P5" and tp[4].occupant != null and player.carried == null, "at the rim, aiming at the middle reaches past the full outer stack and sets the crate in P5 (%s)" % at_rim) and ok
+	# Each step starts as if the one before it passed, so a failure doesn't carry over.
+	walked = await _next_pallet_step(tharsis, [4])
+	walked = await _carry_to_pallet(tharsis, hs[1], 0.0) and walked
 	await _aim_use(tharsis.to_global(tp[4].position))
-	ok = _check(tp[13].occupant != null and player.carried == null, "aiming at the middle again stacks the next crate on it (P14)") and ok
-	await _bring_to_pallet(tharsis, hs[2])
+	ok = _check(walked and tp[13].occupant != null and player.carried == null, "aiming at the middle again stacks the next crate on it (P14)") and ok
+	walked = await _next_pallet_step(tharsis, [4, 13])
+	walked = await _carry_to_pallet(tharsis, hs[2], 0.0) and walked
 	await _aim_use(tharsis.to_global(tp[4].position))
-	ok = _check(player.carried != null and player.prompt == "That stack is full", "with the whole pallet full, it says so and you keep the crate") and ok
+	ok = _check(walked and player.carried != null and player.prompt == "That stack is full", "with the whole pallet full, it says so and you keep the crate") and ok
 
 	ok = _check(_carry_clips == 0, "a carried crate never went into a wall, the ship or another crate on any walk (%d frames)%s" % [_carry_clips, _carry_clip_at]) and ok
+	ok = _check(_carry_jumps == 0, "a carried crate that was drawn in always eased back out instead of jumping (%d frames)" % _carry_jumps) and ok
+	ok = _check(_carry_lifts == 0, "the crate's collider never held you up off the floor on any walk (%d frames)" % _carry_lifts) and ok
+	player.give_up_carried() # hands free for whatever runs next
 
 	print("SELFTEST " + ("OK" if ok else "FAILED"))
 	get_tree().quit(0 if ok else 1)
@@ -559,15 +672,28 @@ func _fetch_from_pallet(st: Station, i: int, column_z := 0.6) -> void:
 	await _frames(3)
 
 
-## Lifts the crate in a hold slot by aiming at it, then walks up to the near side
-## of the station's pallet, level with its middle row.
-func _bring_to_pallet(st: Station, s: Slot) -> void:
-	player.global_position = ship.to_global(Vector3(1.4, 0.3, s.position.z))
-	await _frames(3)
+## From the hold aisle: walks over to hold slot s, lifts its crate by aiming at it, carries it down the
+## ramp and stops `back` metres short of the rim of the station's pallet, level with its middle row.
+## Whether the crate came along and every walk arrived.
+func _carry_to_pallet(st: Station, s: Slot, back: float) -> bool:
+	var walked := await _walk_to(ship.to_global(Vector3(1.4, 0.3, s.position.z)), 900, 0.15)
 	await _aim_use(ship.to_global(s.position))
-	player.global_position = st.to_global(Vector3(18.0, 0, 2.6))
-	await _frames(3)
-	await _walk_to(st.to_global(Vector3(21.0, 0, 2.6)), 90)
+	var lifted := player.carried != null
+	walked = await _walk_path([ship.to_global(Vector3(0, 0.3, 14)), ship.to_global(Vector3(0, -2, 26)), st.to_global(Vector3(14, 0, -20)), st.to_global(Vector3(18.2, 0, 0))]) and walked
+	walked = await _walk_to(st.to_global(Vector3(19.4 - back, 0, 2.6)), 300, 0.1) and walked
+	return lifted and walked
+
+
+## Between pallet steps: if the last one failed, puts things as they would be had it passed (clears
+## the crate from your hands, fills the pallet slots it should have filled), then walks back up into
+## the hold. Whether every walk arrived.
+func _next_pallet_step(st: Station, filled: Array) -> bool:
+	if player.carried:
+		player.give_up_carried()
+	for i in filled:
+		if st.pallet_slots[i].occupant == null:
+			Crate.create("water_ice").place_in(st.pallet_slots[i])
+	return await _walk_path([st.to_global(Vector3(18.2, 0, 0)), st.to_global(Vector3(14, 0, -20)), ship.to_global(Vector3(0, -2, 26)), ship.to_global(Vector3(0, 0.3, 14))])
 
 
 # ---------------------------------------------------------------- screenshots
@@ -625,7 +751,7 @@ func _capture() -> void:
 	await _shot("04_loading")
 	# Up against the hangar wall, the carried crate is drawn in instead of going into it.
 	_look_from(ceres.to_global(Vector3(18.8, 0, -48.0)), ceres.to_global(Vector3(17.7, 1.05, -49.6)))
-	player._hold_carried()
+	player._hold_carried(1.0)
 	player._update_aim()
 	await _shot("carry_at_wall")
 	player.place(Player.stack_target(ship.hold_slots[0].occupant))
@@ -671,9 +797,9 @@ func _capture() -> void:
 			Crate.create("water_ice").place_in(tp[i])
 	var held := Crate.create("water_ice")
 	held.place_in(tp[4])
-	player.pick_up(held)
 	_look_from(tharsis.to_global(Vector3(24, 0, -1.95)), tharsis.to_global(tp[4].position))
-	player._hold_carried()
+	player.pick_up(held)
+	player._hold_carried(1.0)
 	player._update_aim()
 	await _shot("carry_pallet_middle")
 	get_tree().quit()
