@@ -34,8 +34,8 @@ const CAM_PITCH := -10.0
 const NAV_PITCH := -54.0
 const CAM_FOV := 72.0
 ## Directory view: lean toward the route printer, left of the keypad, and zoom in.
-const DIR_EYE := Vector3(-0.79, 2.34, -9.55)
-const DIR_LOOK := Vector3(-1.85, 0.7, -9.98)
+const DIR_EYE := Vector3(-0.79, 2.43, -9.55)
+const DIR_LOOK := Vector3(-1.85, 0.79, -9.98)
 const DIR_FOV := 38.0
 
 var state := State.LANDED
@@ -95,7 +95,7 @@ func _build_hull() -> void:
 		Vox.box(self, Vector3(5.55 * sx, 3.4, 1), Vector3(0.1, 0.35, 30), Vox.MUSTARD)
 		# Engine nacelles and landing legs
 		Vox.solid(self, Vector3(6.9 * sx, 3, 11), Vector3(2.6, 2.8, 8), Vox.BEIGE3)
-		_engine_glow.append(Vox.box(self, Vector3(6.9 * sx, 3, 15.1), Vector3(2, 2, 0.2), Color("ff9a3c"), true))
+		_engine_glow.append(Vox.solid(self, Vector3(6.9 * sx, 3, 15.1), Vector3(2, 2, 0.2), Color("ff9a3c"), true))
 		for z in [-9, 11]:
 			Vox.solid(self, Vector3(3.5 * sx, -0.85, z), Vector3(0.6, 1.7, 0.6), Vox.DBROWN)
 			Vox.box(self, Vector3(3.5 * sx, -1.85, z), Vector3(1.4, 0.3, 1.4), Vox.DBROWN)
@@ -104,10 +104,10 @@ func _build_hull() -> void:
 	Vox.solid(self, Vector3(0, 6.8, 1), Vector3(11, 0.6, 30), Vox.BEIGE)
 	Vox.solid(self, Vector3(0, 4.85, -4), Vector3(2.6, 3.9, 0.4), Vox.BEIGE2)
 	Vox.solid(self, Vector3(0, 0.9, -14), Vector3(10.4, 1.2, 0.4), Vox.BEIGE)
-	Vox.solid(self, Vector3(0, 1.0, -15), Vector3(8, 1.8, 1.6), Vox.BEIGE2)
+	Vox.solid(self, Vector3(0, 0.9, -15), Vector3(8, 1.6, 1.6), Vox.BEIGE2) # top stays under the gauge hood from the seat
 	Vox.box(self, Vector3(0, 1.2, -15.82), Vector3(8, 0.3, 0.05), Vox.ORANGE)
-	Vox.box(self, Vector3(0, 7.6, 4), Vector3(0.3, 1.4, 0.3), Vox.DBROWN)
-	Vox.box(self, Vector3(0, 8.4, 4), Vector3(0.4, 0.4, 0.4), Color("ff4a2e"), true)
+	Vox.solid(self, Vector3(0, 7.6, 4), Vector3(0.3, 1.4, 0.3), Vox.DBROWN)
+	Vox.solid(self, Vector3(0, 8.4, 4), Vector3(0.4, 0.4, 0.4), Color("ff4a2e"), true)
 	Vox.label(self, "KESTREL-9", Vector3(5.56, 5.3, 4), 0.012, Vox.DBROWN, GameState.font_label).rotation.y = PI / 2
 	# Rear ramp
 	var rm := BoxMesh.new()
@@ -121,7 +121,7 @@ func _build_hull() -> void:
 
 func _build_hold() -> void:
 	for x in [-2.5, 2.5]:
-		Vox.box(self, Vector3(x, 6.45, 5), Vector3(0.6, 0.15, 18), Vox.LAMP, true)
+		Vox.solid(self, Vector3(x, 6.45, 5), Vector3(0.6, 0.15, 18), Vox.LAMP, true)
 	var l := OmniLight3D.new()
 	l.position = Vector3(0, 5.6, 5)
 	l.omni_range = 16
@@ -153,52 +153,29 @@ func _build_cockpit() -> void:
 	l.light_energy = 0.6
 	l.light_color = Color("ffd9a0")
 	add_child(l)
-	# Seat
-	Vox.solid(self, Vector3(0, 0.8, -8), Vector3(1.3, 0.5, 1.3), Vox.BROWN)
-	Vox.solid(self, Vector3(0, 1.75, -7.35), Vector3(1.3, 1.7, 0.3), Vox.ORANGE)
-	Vox.add_shape(self, Vector3(0, 0.5, -8), Vector3(1.3, 0.6, 1.3)) # seat base down to the floor
+	# Seat (the cockpit art builds the chair itself)
+	# Keep the use box inside the armrests: the aim ray ignores an area the eye is standing in.
 	var seat := Interactable.new("Fly ship", Vector3(1.6, 2.2, 1.6))
 	seat.position = Vector3(0, 1.3, -7.9)
 	add_child(seat)
 	seat.used.connect(func(_by): pilot_seat_used.emit())
-	# Dashboard
-	Vox.solid(self, Vector3(0, 0.9, -12.4), Vector3(9.6, 1.2, 1.6), Vox.BEIGE)
-	Vox.add_shape(self, Vector3(0, 0.85, -11.4), Vector3(6.8, 1.3, 0.4)) # CRT bank
-	Vox.box(self, Vector3(0, 1.53, -12.4), Vector3(9.6, 0.06, 1.7), Vox.DBROWN)
-	for i in 10:
-		Vox.box(self, Vector3(-2.25 + i * 0.5, 1.57, -11.75), Vector3(0.25, 0.02, 0.12), Vox.MUSTARD if i % 2 == 0 else Color("1a1410"))
-	# Shelf for the keypad, the route printer (left) and the slip clipboard (right)
-	Vox.box(self, Vector3(-0.45, 0.3, -10.2), Vector3(4.0, 0.1, 1.7), Vox.BEIGE3)
-	Vox.add_shape(self, Vector3(-0.45, 0.5, -10.2), Vector3(4.0, 0.6, 1.7)) # no walking over the keys
-	# Canopy frame
-	for sx in [-1, 1]:
-		Vox.solid(self, Vector3(4.15 * sx, 3.9, -13.75), Vector3(0.7, 5.0, 0.5), Vox.DBROWN)
-		Vox.solid(self, Vector3(4.7 * sx, 1.8, -12.0), Vector3(0.5, 0.5, 4), Vox.DBROWN)
-	Vox.box(self, Vector3(0, 6.15, -13.75), Vector3(9, 0.6, 0.5), Vox.DBROWN)
-	# CRTs
-	crt_scan = CrtScreen.new(Vector2(1.8, 1.3), Vector2i(512, 384), Vox.PHOS_GREEN, 28)
-	crt_nav = CrtScreen.new(Vector2(1.8, 1.3), Vector2i(512, 384), Vox.PHOS_AMBER, 28)
-	crt_cargo = CrtScreen.new(Vector2(1.8, 1.3), Vector2i(512, 384), Vox.PHOS_GREEN, 26)
-	for pair in [[crt_scan, -2.3, "NAV SCANNER"], [crt_nav, 0.0, "NAV COMPUTER"], [crt_cargo, 2.3, "CARGO"]]:
-		var c: CrtScreen = pair[0]
-		c.position = Vector3(pair[1], 0.85, -11.45)
-		c.rotation.x = deg_to_rad(-12)
-		add_child(c)
-		var tag := Vox.label(self, pair[2], Vector3(pair[1], 0.07, -11.48), 0.0022, Vox.CREAM, GameState.font_label)
-		tag.outline_size = 0
-		Vox.box(self, Vector3(pair[1], 0.07, -11.5), Vector3(0.9, 0.14, 0.02), Color("16130f"))
-	# Lamps
-	var lamp_specs := [["GEAR", Color("7dff8a"), 1.25], ["DOCK", Vox.PHOS_AMBER, 0.95], ["CRUISE", Color("7dff8a"), 0.65]]
-	for spec in lamp_specs:
-		var lm := Vox.box(self, Vector3(4.1, spec[2], -11.58), Vector3(0.55, 0.24, 0.05), Color("3a3029"))
-		lm.set_meta("on", spec[1])
-		_lamps[spec[0]] = lm
-		Vox.label(self, spec[0], Vector3(4.1, spec[2], -11.55), 0.0012, Vox.DBROWN, GameState.font_label)
+	var throttle := Interactable.new("Fly ship", Vector3(0.3, 0.75, 0.5)) # the throttle quadrant
+	throttle.position = Vector3(0.98, 0.65, -8.3)
+	add_child(throttle)
+	throttle.used.connect(func(_by): pilot_seat_used.emit())
+	# CRTs, set into the monitor housings Cockpit builds
+	crt_scan = CrtScreen.new(Cockpit.SCREEN, Vector2i(512, 384), Vox.PHOS_GREEN, 28, false)
+	crt_nav = CrtScreen.new(Cockpit.SCREEN, Vector2i(512, 384), Vox.PHOS_AMBER, 28, false)
+	crt_cargo = CrtScreen.new(Cockpit.SCREEN, Vector2i(512, 384), Vox.PHOS_GREEN, 26, false)
 	for i in 3:
-		Vox.box(self, Vector3(-4.1, 1.25 - i * 0.3, -11.55), Vector3(0.12, 0.12, 0.3), Color("e8e0d0"))
+		var c: CrtScreen = [crt_scan, crt_nav, crt_cargo][i]
+		c.position = Vector3(Cockpit.CRT_X[i], Cockpit.CRT_Y, Cockpit.CRT_Z)
+		c.rotation.x = deg_to_rad(Cockpit.CRT_TILT)
+		add_child(c)
 	# Keypad
 	nav = NavComputer.new()
-	nav.position = Vector3(0, 0.47, -10.15)
+	# The keypad, slip clip and printer sit on the cockpit desk (top at y 0.44, see Cockpit._desk).
+	nav.position = Vector3(0, 0.56, -10.15)
 	nav.rotation.x = deg_to_rad(12)
 	add_child(nav)
 	nav.build(crt_nav)
@@ -208,14 +185,14 @@ func _build_cockpit() -> void:
 	# Route printer and the clipboard its slips land on
 	slip_clip = Node3D.new()
 	slip_clip.name = "SlipClip"
-	slip_clip.position = Vector3(1.08, 0.58, -10.2)
+	slip_clip.position = Vector3(1.08, 0.67, -10.2)
 	slip_clip.rotation = Vector3(deg_to_rad(35), deg_to_rad(-15), 0)
 	add_child(slip_clip)
 	Vox.box(slip_clip, Vector3(0, -0.018, 0.0), Vector3(0.68, 0.025, 0.8), Vox.DBROWN)
 	Vox.box(slip_clip, Vector3(0, 0.012, -0.36), Vector3(0.28, 0.035, 0.07), Vox.MUSTARD)
 	Vox.box(slip_clip, Vector3(0, -0.15, -0.12), Vector3(0.4, 0.25, 0.35), Vox.DBROWN) # stand, under the board
 	directory = NavDirectory.new()
-	directory.position = Vector3(-1.9, 0.35, -10.0)
+	directory.position = Vector3(-1.9, 0.44, -10.0)
 	directory.rotation.y = deg_to_rad(68)
 	add_child(directory)
 	directory.clip = slip_clip
@@ -232,6 +209,10 @@ func _build_cockpit() -> void:
 	add_child(cam)
 	nav.camera = cam
 	directory.camera = cam
+	var art := Cockpit.new()
+	add_child(art)
+	art.build(self)
+	_lamps = art.lamps
 
 
 # ---------------------------------------------------------------- states

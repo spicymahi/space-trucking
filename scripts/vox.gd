@@ -28,6 +28,72 @@ const L_INTERACT := 64
 const L_KEYPAD := 128
 
 static var _mats := {}
+static var _vmat: StandardMaterial3D
+
+
+## Many static boxes merged into one vertex-coloured mesh, so a detailed panel costs one draw call.
+## Boxes are placed in `frame` (body space; set it to build on a tilted panel). solid() also adds a
+## matching collider to the body. The boxes are kept as mesh metadata for the collider audit.
+class Batch:
+	extends RefCounted
+	## Face normal, then u and v with u x v = normal.
+	const FACES := [
+		[Vector3.RIGHT, Vector3.UP, Vector3.BACK], [Vector3.LEFT, Vector3.BACK, Vector3.UP],
+		[Vector3.UP, Vector3.BACK, Vector3.RIGHT], [Vector3.DOWN, Vector3.RIGHT, Vector3.BACK],
+		[Vector3.BACK, Vector3.RIGHT, Vector3.UP], [Vector3.FORWARD, Vector3.UP, Vector3.RIGHT],
+	]
+	var body: CollisionObject3D
+	var frame := Transform3D.IDENTITY
+	var boxes: Array = [] # [Transform3D, Vector3 size] in body space
+	var _st := SurfaceTool.new()
+
+	func _init(p_body: CollisionObject3D) -> void:
+		body = p_body
+		_st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	func box(pos: Vector3, size: Vector3, color: Color, basis := Basis.IDENTITY) -> void:
+		var t := frame * Transform3D(basis, pos)
+		boxes.append([t, size])
+		var h := size / 2
+		_st.set_color(color)
+		for f in FACES:
+			var n: Vector3 = f[0]
+			var u: Vector3 = f[1]
+			var v: Vector3 = f[2]
+			var c := n * (h * n).abs()
+			var du := u * (h * u).abs()
+			var dv := v * (h * v).abs()
+			_st.set_normal((t.basis * n).normalized())
+			# Godot treats clockwise triangles as front faces.
+			for p in [c - du - dv, c + du + dv, c + du - dv, c - du - dv, c - du + dv, c + du + dv]:
+				_st.add_vertex(t * p)
+
+	func solid(pos: Vector3, size: Vector3, color: Color, basis := Basis.IDENTITY) -> void:
+		box(pos, size, color, basis)
+		shape(pos, size, basis)
+
+	## Collider only, in frame space.
+	func shape(pos: Vector3, size: Vector3, basis := Basis.IDENTITY) -> void:
+		var t := frame * Transform3D(basis, pos)
+		Vox.add_shape(body, t.origin, size, t.basis)
+
+	func commit(node_name := "VoxBatch") -> MeshInstance3D:
+		var mi := MeshInstance3D.new()
+		mi.name = node_name
+		mi.mesh = _st.commit()
+		mi.material_override = Vox.vertex_mat()
+		mi.set_meta("vox_boxes", boxes)
+		body.add_child(mi)
+		return mi
+
+
+static func vertex_mat() -> StandardMaterial3D:
+	if _vmat == null:
+		_vmat = StandardMaterial3D.new()
+		_vmat.vertex_color_use_as_albedo = true
+		_vmat.vertex_color_is_srgb = true
+		_vmat.roughness = 0.9
+	return _vmat
 
 
 static func mat(c: Color, emissive := false, alpha := 1.0) -> StandardMaterial3D:

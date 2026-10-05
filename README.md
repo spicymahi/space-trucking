@@ -94,6 +94,7 @@ Everything is built in code from `scripts/`, so there are no large scene files t
 | `scripts/main.gd` | World setup, mode switching (on foot, piloting, terminal), self-test and screenshot capture |
 | `scripts/game_state.gd` | Autoload with credits, markets, stations, contract offers and jobs, and input bindings |
 | `scripts/ship.gd` | The ship: hull, hold, cockpit, assisted flight, cruise, docking |
+| `scripts/cockpit.gd` | Cockpit art: CRT monitor housings, gauge hood with live dials, toggles and lamps, canopy, seat |
 | `scripts/nav_computer.gd` | The physical keypad and nav CRT |
 | `scripts/nav_directory.gd` | The route printer: station list, printed slips and the slip clipboard |
 | `scripts/slot.gd`, `scripts/crate.gd` | Cargo slots (with stacking) and crates |
@@ -101,11 +102,18 @@ Everything is built in code from `scripts/`, so there are no large scene files t
 | `scripts/player.gd` | On-foot movement and the crate tractor tool |
 | `scripts/hud.gd`, `scripts/trade_terminal_ui.gd` | Flight overlay, prompts and the exchange screen |
 | `scripts/contract_terminal_ui.gd` | The contract board screen: sign, deliver and abandon jobs |
+| `scripts/vox.gd`, `scripts/collider_audit.gd` | Box helpers (including `Vox.Batch`, which merges static boxes into one draw call) and the collider audit |
 
 A headless test plays the whole loop the way a player does, with aim, walking and key presses (buy, load and stack, sign a hauling job and carry its crates aboard, print a route slip, key it in, fly, cruise, dock, land, unload, sell, deliver the job, abandon another), and prints `SELFTEST OK`:
 
 ```sh
 godot --headless --path . -- --selftest
+```
+
+The self-test also audits the ship's colliders: every visible part bigger than a knob must have a matching collider, and every collider must be filled by something visible. To run only that check:
+
+```sh
+godot --headless --path . -- --audit
 ```
 
 To save screenshots of the main views into `captures/`, run with a display:
