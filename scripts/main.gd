@@ -23,6 +23,10 @@ void sky() {
 }
 """
 
+## Collision shapes on the ship body itself, which every flight step sweeps. A new one is a
+## deliberate choice: interior fittings belong on ship.interior.
+const SHIP_SWEPT_SHAPES := 28
+
 var stations := {}
 var ship: Ship
 var player: Player
@@ -261,6 +265,25 @@ func _bench() -> void:
 	get_tree().quit()
 
 
+## The cockpit fittings are on the interior body, which nothing outside collides with,
+## so the window glass on the ship body must stop things before they reach the cabin.
+func _window_sealed() -> bool:
+	var ball := PhysicsShapeQueryParameters3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = 0.15
+	ball.shape = sphere
+	ball.collision_mask = Vox.L_SHIP
+	var space := get_world_3d().direct_space_state
+	for dir: Vector3 in [Vector3.BACK, Vector3(1, 0, 1).normalized(), Vector3(-1, 0, 1).normalized(), Vector3(0, -0.5, 1).normalized()]:
+		var from := ship.to_global(Vector3(0, 3.0, -13.85) - dir * 20)
+		ball.transform = Transform3D(Basis.IDENTITY, from)
+		ball.motion = ship.global_basis * dir * 30
+		var r := space.cast_motion(ball)
+		if r[0] >= 1.0 or ship.to_local(from + ball.motion * r[0]).z > -13.4:
+			return false
+	return true
+
+
 ## `-- --audit`: only the collider audit, for quick checks while building art.
 func _audit_only() -> void:
 	await _frames(5)
@@ -333,7 +356,8 @@ func _selftest() -> void:
 	ok = _check(mode == "foot" and player.is_on_floor(), "player starts on foot, standing on the hangar floor") and ok
 	ok = _check(_audit_ship(), "every visible part of the ship has a matching collider, and every collider is visible") and ok
 	var swept := ship.get_children().filter(func(c): return c is CollisionShape3D).size()
-	ok = _check(swept <= 32, "the ship's flight sweep tests %d shapes (32 or fewer; cockpit and hold fittings are on the interior body)" % swept) and ok
+	ok = _check(swept == SHIP_SWEPT_SHAPES, "the ship's flight sweep tests %d shapes (expected %d; cockpit and hold fittings are on the interior body)" % [swept, SHIP_SWEPT_SHAPES]) and ok
+	ok = _check(_window_sealed(), "a ball thrown at the windscreen stops at the glass, from ahead and from 45 degrees") and ok
 
 	# Walk test: player moves under gravity without falling through.
 	var y0 := player.global_position.y

@@ -36,7 +36,7 @@ func build(p_ship: Ship) -> void:
 	ship = p_ship
 	name = "Cockpit"
 	var b := Vox.Batch.new(ship)
-	b.collider = ship.interior # only the canopy frame (in _canopy) faces outside
+	b.collider = ship.interior # only the canopy frame and its glass (in _canopy) face outside
 	_dash(b)
 	for x in CRT_X:
 		_monitor(b, x)
@@ -219,6 +219,24 @@ func _gauge(b: Vox.Batch, id: String, x: float, title: String, marks: Array, red
 
 # ---------------------------------------------------------------- canopy
 
+## The window glass seals the opening between pillars, hood and brow on the ship body, so
+## nothing outside reaches the fittings on the interior body. A visible pane fills the collider.
+func _glass(b: Vox.Batch) -> void:
+	var pos := Vector3(0, 3.05, -13.85)
+	var size := Vector3(7.6, 3.1, 0.7)
+	b.collider = ship
+	b.shape(pos, size)
+	var pane := Vox.box(ship, pos, size, Vox.CREAM)
+	pane.name = "CanopyGlass"
+	pane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.6, 0.8, 0.85, 0.07)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.roughness = 0.05
+	m.metallic_specular = 0.9
+	pane.material_override = m
+
+
 func _canopy(b: Vox.Batch) -> void:
 	b.frame = Transform3D.IDENTITY
 	for sx in [-1, 1]:
@@ -238,6 +256,7 @@ func _canopy(b: Vox.Batch) -> void:
 	b.solid(Vector3(0, 5.2, -13.75), Vector3(7.6, 1.3, 0.5), Vox.DBROWN)
 	b.box(Vector3(0, 4.74, -13.49), Vector3(7.6, 0.12, 0.02), Vox.ORANGE)
 	b.box(Vector3(0, 4.635, -13.49), Vector3(7.6, 0.05, 0.02), Vox.MUSTARD)
+	_glass(b)
 	b.collider = ship.interior
 	# Overhead panel from the brow back over the pilot
 	b.solid(Vector3(0, 6.2, -12.2), Vector3(3.2, 0.6, 2.6), Vox.BEIGE2)
