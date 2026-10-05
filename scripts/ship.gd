@@ -22,7 +22,7 @@ const TURN := Vector3(1.1, 0.9, 1.8)
 const LAND_MAX_SPEED := 14.0
 const DOCK_RANGE := 5000.0
 const CRUISE_MIN_DIST := 1500.0
-const RAMP_LEN := 6.5
+const RAMP_LEN := 8.0
 const RAMP_HINGE := Vector3(0, 0.3, 16)
 const CAM_POS := Vector3(0, 2.55, -9.0)
 const CAM_PITCH := -10.0
@@ -197,12 +197,18 @@ func _build_cockpit() -> void:
 
 func _set_ramp(open: bool) -> void:
 	var t: Transform3D
+	# Open, the ramp reaches the station floor; closed, it fills the hull's rear opening.
+	var length := RAMP_LEN if open else 6.8
+	(_ramp_mesh.mesh as BoxMesh).size.y = length
+	(_ramp_shape.shape as BoxShape3D).size.y = length
 	if open:
+		# The top face runs from the hold floor at the hinge down to the station
+		# floor (2.3 m lower), so there is no lip to step over at either end.
 		var a := asin(2.3 / RAMP_LEN)
 		var b := Basis(Vector3.RIGHT, PI / 2 + a)
-		t = Transform3D(b, RAMP_HINGE + b * Vector3.UP * RAMP_LEN / 2)
+		t = Transform3D(b, RAMP_HINGE + b * Vector3(0, RAMP_LEN / 2, 0.2))
 	else:
-		t = Transform3D(Basis.IDENTITY, RAMP_HINGE + Vector3(0, RAMP_LEN / 2, 0))
+		t = Transform3D(Basis.IDENTITY, RAMP_HINGE + Vector3(0, length / 2, 0))
 	_ramp_mesh.transform = t
 	_ramp_shape.transform = t
 

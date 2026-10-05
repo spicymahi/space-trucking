@@ -9,6 +9,10 @@ const GRAVITY := 18.0
 const REACH := 4.0
 const LOOK_SENS := 0.0025
 const STICK_LOOK := 2.6
+## A carried crate is held at waist height, front right of you (yaw only, so it never hides your aim), and becomes
+## part of your collision, so it can't pass through walls, crates or the ramp.
+const CARRY_POS := Vector3(0.8, 1.0, -1.3)
+const CARRY_SCALE := 0.45
 
 var active := true
 var cam: Camera3D
@@ -19,6 +23,7 @@ var _pitch := 0.0
 var _ghost: MeshInstance3D
 var _tool: Node3D
 var _beam: MeshInstance3D
+var _carry_shape: CollisionShape3D
 
 
 func build() -> void:
@@ -34,6 +39,13 @@ func build() -> void:
 	cs.shape = cap
 	cs.position.y = 0.9
 	add_child(cs)
+	_carry_shape = CollisionShape3D.new()
+	var cb := BoxShape3D.new()
+	cb.size = Slot.CRATE_SIZE * CARRY_SCALE
+	_carry_shape.shape = cb
+	_carry_shape.position = CARRY_POS
+	_carry_shape.disabled = true
+	add_child(_carry_shape)
 	cam = Camera3D.new()
 	cam.position = Vector3(0, 1.62, 0)
 	cam.fov = 74
@@ -191,15 +203,17 @@ func use() -> void:
 func pick_up(c: Crate) -> void:
 	c.remove_from_slot()
 	c.get_parent().remove_child(c)
-	cam.add_child(c)
-	c.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * 0.55), Vector3(0, -0.55, -3.2))
+	add_child(c)
+	c.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * CARRY_SCALE), CARRY_POS)
 	c.set_carried(true)
 	carried = c
+	_carry_shape.disabled = false
 
 
 func place(s: Slot) -> void:
 	var c := carried
 	carried = null
+	_carry_shape.disabled = true
 	c.place_in(s)
 	_beam.visible = false
 	_ghost.visible = false

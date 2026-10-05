@@ -77,11 +77,13 @@ func _build_hangar() -> void:
 	for sx in [-1, 1]:
 		Vox.box(self, Vector3(49.8 * sx, 6, 5), Vector3(0.4, 1.6, 110), accent)
 		Vox.box(self, Vector3(49.8 * sx, 4.4, 5), Vector3(0.4, 0.6, 110), Vox.MUSTARD)
-		Vox.box(self, Vector3(49.8 * sx, 1.2, 5), Vector3(0.4, 2.4, 110), Vox.DBROWN)
+		Vox.solid(hull, Vector3(49.8 * sx, 1.2, 5), Vector3(0.4, 2.4, 110), Vox.DBROWN)
 		for z in range(-44, 60, 12):
-			Vox.box(self, Vector3(49.4 * sx, 18, z), Vector3(1.2, 36, 1.6), Vox.BEIGE3)
-	Vox.box(self, Vector3(0, 6, -49.8), Vector3(100, 1.6, 0.4), accent)
-	Vox.box(self, Vector3(0, 1.2, -49.8), Vector3(100, 2.4, 0.4), Vox.DBROWN)
+			Vox.solid(hull, Vector3(49.4 * sx, 18, z), Vector3(1.2, 36, 1.6), Vox.BEIGE3)
+	# Back wall trim, split around the concourse door
+	for sx in [-1, 1]:
+		Vox.solid(hull, Vector3(27.4 * sx, 6, -49.8), Vector3(45.2, 1.6, 0.4), accent)
+		Vox.solid(hull, Vector3(27.4 * sx, 1.2, -49.8), Vector3(45.2, 2.4, 0.4), Vox.DBROWN)
 	# Door frame and signs
 	Vox.box(self, Vector3(-4.4, 3.2, -49.7), Vector3(0.8, 6.4, 0.6), Vox.MUSTARD)
 	Vox.box(self, Vector3(4.4, 3.2, -49.7), Vector3(0.8, 6.4, 0.6), Vox.MUSTARD)

@@ -237,6 +237,23 @@ func _frames(n: int) -> void:
 		await get_tree().physics_frame
 
 
+## Steers the player toward a point with the walk input, like a person holding W.
+func _walk_to(target: Vector3, max_frames := 900) -> bool:
+	Input.action_press("move_forward")
+	var reached := false
+	for f in max_frames:
+		var d := target - player.global_position
+		d.y = 0
+		if d.length() < 0.6:
+			reached = true
+			break
+		player.rotation.y = atan2(-d.x, -d.z)
+		await get_tree().physics_frame
+	Input.action_release("move_forward")
+	player.velocity = Vector3.ZERO
+	return reached
+
+
 func _selftest() -> void:
 	var ok := true
 	var ceres: Station = stations["ceres_yard"]
@@ -251,6 +268,10 @@ func _selftest() -> void:
 	await _frames(30)
 	ok = _check(absf(player.global_position.y - y0) < 0.6, "player stays on the floor") and ok
 
+	# Walk from the pad through the concourse door to the exchange terminal.
+	var walked := await _walk_to(ceres.to_global(Vector3(0, 0, -62))) and await _walk_to(ceres.to_global(Vector3(4.6, 0, -68)))
+	ok = _check(walked, "walked from the pad through the concourse door to the exchange") and ok
+
 	# Buy 4 crates of water ice.
 	_on_terminal(ceres, "trade")
 	hud.terminal.sel = GameState.COMMODITY_ORDER.find("water_ice")
@@ -260,12 +281,25 @@ func _selftest() -> void:
 	ok = _check(n == 4 and ceres.pallet_count("water_ice") == 4, "bought 4 water ice crates onto pallet 07-B") and ok
 	ok = _check(GameState.credits < start, "credits went down after buying (%d -> %d)" % [start, GameState.credits]) and ok
 
-	# Load them into the hold.
+	# Load them into the hold. Carry the first one by walking: into the back wall
+	# (it must not pass through), then up the ramp into the hold.
 	var crates: Array[Crate] = []
 	for s in ceres.pallet_slots:
 		if s.occupant:
 			crates.append(s.occupant)
-	for i in crates.size():
+	player.global_position = ceres.to_global(Vector3(18.8, 0, 2.6))
+	player.velocity = Vector3.ZERO
+	await _frames(5)
+	player.pick_up(crates[0])
+	await _walk_to(ceres.to_global(Vector3(18.8, 0, -60)), 720)
+	var crate_z := ceres.to_local(crates[0].global_position).z
+	var half := Slot.CRATE_SIZE.z * Player.CARRY_SCALE / 2
+	ok = _check(crate_z - half > -49.65, "carried crate stops at the hangar wall instead of passing through (front at z %.2f, wall trim at -49.6)" % (crate_z - half)) and ok
+	walked = await _walk_to(ship.to_global(Vector3(0, -2, 28))) and await _walk_to(ship.to_global(Vector3(0, 0.3, 8)))
+	var in_hold := ship.to_local(player.global_position)
+	ok = _check(walked and absf(in_hold.y - 0.3) < 0.2, "walked up the ramp into the hold carrying a crate (hold floor height %.2f)" % in_hold.y) and ok
+	player.place(ship.hold_slots[0])
+	for i in range(1, crates.size()):
 		player.pick_up(crates[i])
 		player.place(ship.hold_slots[i])
 	await _frames(2)
@@ -362,6 +396,10 @@ func _capture() -> void:
 	await _frames(10)
 	_look_from(ceres.to_global(Vector3(-22, 0, 34)), ship.to_global(Vector3(0, 2, 2)))
 	await _shot("01_hangar")
+	_look_from(ship.to_global(Vector3(4, -2, 31)), ship.to_global(Vector3(0, 0.5, 10)))
+	await _shot("09_ramp")
+	_look_from(ceres.to_global(Vector3(3, 0, -32)), ceres.to_global(Vector3(0, 2.5, -55)))
+	await _shot("10_concourse_door")
 	_look_from(ceres.to_global(Vector3(-2, 0, -62)), ceres.to_global(Vector3(6.6, 1.4, -68)))
 	player._update_aim()
 	await _shot("02_concourse")
