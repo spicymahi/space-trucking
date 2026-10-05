@@ -200,6 +200,39 @@ static func stack_top(c: Crate) -> Crate:
 	return c
 
 
+## Every slot in the stack a hit slot or crate belongs to, bottom first.
+static func stack_slots(hit: Object) -> Array[Slot]:
+	var out: Array[Slot] = []
+	var s: Slot = hit if hit is Slot else (hit.slot if hit is Crate else null)
+	if s == null:
+		return out
+	while s.below:
+		s = s.below
+	while s:
+		out.append(s)
+		s = s.above
+	return out
+
+
+## While carrying: the slot F would fill. A full stack doesn't hide a free one
+## behind it, so you can reach past the outer stacks to the middle of a pallet.
+func _carry_target(hit: Object) -> Slot:
+	var target := stack_target(hit)
+	for _i in 3: # a pallet is 3 stacks deep
+		var stack := stack_slots(hit)
+		if target or stack.is_empty():
+			break
+		for s in stack:
+			ray.add_exception(s)
+			if s.occupant:
+				ray.add_exception(s.occupant)
+		ray.force_raycast_update()
+		hit = ray.get_collider() if ray.is_colliding() else null
+		target = stack_target(hit)
+	ray.clear_exceptions()
+	return target
+
+
 func _update_aim() -> void:
 	ray.collision_mask = _aim_mask()
 	ray.force_raycast_update()
@@ -209,7 +242,7 @@ func _update_aim() -> void:
 	prompt = ""
 	if carried:
 		_update_beam()
-		var target := stack_target(hit)
+		var target := _carry_target(hit)
 		if target:
 			_ghost.global_transform = target.global_transform
 			_ghost.visible = true
@@ -245,7 +278,7 @@ func use() -> void:
 	ray.force_raycast_update()
 	var hit := ray.get_collider() if ray.is_colliding() else null
 	if carried:
-		var target := stack_target(hit)
+		var target := _carry_target(hit)
 		if target:
 			place(target)
 		elif hit is Interactable:

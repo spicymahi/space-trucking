@@ -521,6 +521,26 @@ func _selftest() -> void:
 	ok = _check(ship.hold_count() == 0 and tharsis.pallet_count("water_ice") == 0 and player.carried == null, "hand, pallet and hold are all empty after the sale") and ok
 	await _press_key(KEY_ESCAPE)
 	ok = _check(GameState.credits > start, "profit on the run: %d -> %d cr" % [start, GameState.credits]) and ok
+
+	# A full pallet doesn't hide its middle: with the 8 outer stacks full, aiming
+	# at the middle with a crate in hand reaches past the stack in front of it.
+	for i in tp.size():
+		if i != 4 and i != 13: # P5 and P14 make the middle stack
+			Crate.create("water_ice").place_in(tp[i])
+	for i in 3:
+		Crate.create("water_ice").place_in(hs[i])
+	await _bring_to_pallet(tharsis, hs[0])
+	await _aim_at(tharsis.to_global(tp[4].position))
+	var aimed := player.prompt
+	await _press_key(KEY_F)
+	ok = _check(aimed == "Place crate in pallet slot P5" and tp[4].occupant != null and player.carried == null, "with the 8 outer pallet stacks full, aiming at the middle reaches past them and sets the crate in P5 (prompt: %s)" % aimed) and ok
+	await _bring_to_pallet(tharsis, hs[1])
+	await _aim_use(tharsis.to_global(tp[4].position))
+	ok = _check(tp[13].occupant != null and player.carried == null, "aiming at the middle again stacks the next crate on it (P14)") and ok
+	await _bring_to_pallet(tharsis, hs[2])
+	await _aim_use(tharsis.to_global(tp[4].position))
+	ok = _check(player.carried != null and player.prompt == "That stack is full", "with the whole pallet full, it says so and you keep the crate") and ok
+
 	ok = _check(_carry_clips == 0, "a carried crate never went into a wall, the ship or another crate on any walk (%d frames)%s" % [_carry_clips, _carry_clip_at]) and ok
 
 	print("SELFTEST " + ("OK" if ok else "FAILED"))
@@ -537,6 +557,17 @@ func _fetch_from_pallet(st: Station, i: int, column_z := 0.6) -> void:
 	await _aim_use(st.to_global(st.pallet_slots[i].position))
 	player.global_position = ship.to_global(Vector3(1.4, 0.3, column_z))
 	await _frames(3)
+
+
+## Lifts the crate in a hold slot by aiming at it, then walks up to the near side
+## of the station's pallet, level with its middle row.
+func _bring_to_pallet(st: Station, s: Slot) -> void:
+	player.global_position = ship.to_global(Vector3(1.4, 0.3, s.position.z))
+	await _frames(3)
+	await _aim_use(ship.to_global(s.position))
+	player.global_position = st.to_global(Vector3(18.0, 0, 2.6))
+	await _frames(3)
+	await _walk_to(st.to_global(Vector3(21.0, 0, 2.6)), 90)
 
 
 # ---------------------------------------------------------------- screenshots
@@ -595,7 +626,8 @@ func _capture() -> void:
 	# Up against the hangar wall, the carried crate is drawn in instead of going into it.
 	_look_from(ceres.to_global(Vector3(18.8, 0, -48.0)), ceres.to_global(Vector3(17.7, 1.05, -49.6)))
 	player._hold_carried()
-	await _shot("13_carry_at_wall")
+	player._update_aim()
+	await _shot("carry_at_wall")
 	player.place(Player.stack_target(ship.hold_slots[0].occupant))
 	_on_seat()
 	await _shot("05_cockpit")
@@ -630,4 +662,18 @@ func _capture() -> void:
 	player.set_physics_process(false)
 	_on_terminal(tharsis, "trade")
 	await _shot("12_exchange_sell")
+	hud.terminal.close()
+	player.set_physics_process(false)
+	# A full pallet: aiming at the middle with a crate in hand reaches past the outer stack.
+	var tp := tharsis.pallet_slots
+	for i in tp.size():
+		if i != 4 and i != 13:
+			Crate.create("water_ice").place_in(tp[i])
+	var held := Crate.create("water_ice")
+	held.place_in(tp[4])
+	player.pick_up(held)
+	_look_from(tharsis.to_global(Vector3(24, 0, -1.95)), tharsis.to_global(tp[4].position))
+	player._hold_carried()
+	player._update_aim()
+	await _shot("carry_pallet_middle")
 	get_tree().quit()
