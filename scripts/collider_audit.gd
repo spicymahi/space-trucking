@@ -12,7 +12,8 @@ const STEP := 0.5 # largest spacing between sample points
 
 
 ## Returns a list of problems (empty when clean). Skips crates and the subtrees in `skip`.
-static func run(body: CollisionObject3D, skip: Array = []) -> PackedStringArray:
+## Colliders on `extra` bodies (such as a ship's interior body) count as the body's own.
+static func run(body: CollisionObject3D, skip: Array = [], extra: Array = []) -> PackedStringArray:
 	var inv := body.global_transform.affine_inverse()
 	var visuals: Array = [] # [Transform3D, half extents, AABB, label]
 	var stack: Array[Node] = [body]
@@ -31,9 +32,12 @@ static func run(body: CollisionObject3D, skip: Array = []) -> PackedStringArray:
 			var t: Transform3D = inv * mi.global_transform
 			visuals.append(_entry(t, (mi.mesh as BoxMesh).size, "%s at %s" % [mi.get_path(), _v(t.origin)]))
 	var shapes: Array = []
-	for c in body.get_children():
-		if c is CollisionShape3D and c.shape is BoxShape3D and not c.disabled:
-			shapes.append(_entry(c.transform, (c.shape as BoxShape3D).size, "collider at %s size %s" % [_v(c.transform.origin), _v((c.shape as BoxShape3D).size)]))
+	for b in [body] + extra:
+		for c in b.get_children():
+			if c is CollisionShape3D and c.shape is BoxShape3D and not c.disabled:
+				var t: Transform3D = inv * (c as CollisionShape3D).global_transform
+				var size := (c.shape as BoxShape3D).size
+				shapes.append(_entry(t, size, "%s collider at %s size %s" % [b.name, _v(t.origin), _v(size)]))
 	var out := PackedStringArray()
 	for v in visuals:
 		if v[1].x * 2 < SMALL and v[1].y * 2 < SMALL and v[1].z * 2 < SMALL:

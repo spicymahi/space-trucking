@@ -36,6 +36,7 @@ func build(p_ship: Ship) -> void:
 	ship = p_ship
 	name = "Cockpit"
 	var b := Vox.Batch.new(ship)
+	b.collider = ship.interior # only the canopy frame (in _canopy) faces outside
 	_dash(b)
 	for x in CRT_X:
 		_monitor(b, x)
@@ -221,7 +222,9 @@ func _gauge(b: Vox.Batch, id: String, x: float, title: String, marks: Array, red
 func _canopy(b: Vox.Batch) -> void:
 	b.frame = Transform3D.IDENTITY
 	for sx in [-1, 1]:
+		b.collider = ship # the window frame can meet the outside world
 		b.solid(Vector3(4.35 * sx, 3.9, -13.75), Vector3(1.1, 5.0, 0.5), Vox.DBROWN)
+		b.collider = ship.interior
 		b.solid(Vector3(4.7 * sx, 1.8, -12.0), Vector3(0.5, 0.5, 4), Vox.DBROWN)
 		# Pillars lean in toward the brow in voxel steps.
 		for i in 10:
@@ -229,11 +232,13 @@ func _canopy(b: Vox.Batch) -> void:
 			var w := 3.8 - inner
 			b.solid(Vector3((inner + w / 2) * sx, 2.11 + i * 0.26, -13.75), Vector3(w, 0.26, 0.5), Vox.DBROWN)
 			b.box(Vector3((inner + 0.02) * sx, 2.11 + i * 0.26, -13.49), Vector3(0.04, 0.26, 0.02), Vox.BROWN)
+	b.collider = ship
 	b.solid(Vector3(0, 6.15, -13.75), Vector3(9, 0.6, 0.5), Vox.DBROWN)
 	# Brow over the canopy, with the livery stripes facing the pilot
 	b.solid(Vector3(0, 5.2, -13.75), Vector3(7.6, 1.3, 0.5), Vox.DBROWN)
 	b.box(Vector3(0, 4.74, -13.49), Vector3(7.6, 0.12, 0.02), Vox.ORANGE)
 	b.box(Vector3(0, 4.635, -13.49), Vector3(7.6, 0.05, 0.02), Vox.MUSTARD)
+	b.collider = ship.interior
 	# Overhead panel from the brow back over the pilot
 	b.solid(Vector3(0, 6.2, -12.2), Vector3(3.2, 0.6, 2.6), Vox.BEIGE2)
 	b.box(Vector3(0, 5.89, -12.2), Vector3(3.0, 0.02, 2.4), BEZEL)
@@ -309,7 +314,7 @@ func _walls(b: Vox.Batch) -> void:
 		for z in [-6.8, -9.2]:
 			var lamp := Vox.box(self, Vector3(x - 0.05 * sx, 4.8, z), Vector3(0.1, 0.36, 0.7), Vox.LAMP, true)
 			lamp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			Vox.add_shape(ship, lamp.position, Vector3(0.1, 0.36, 0.7))
+			Vox.add_shape(ship.interior, lamp.position, Vector3(0.1, 0.36, 0.7))
 	# Hazard trim round the hold door (outside its 2.6 m opening)
 	b.frame = Transform3D(Basis(Vector3.UP, PI), Vector3(0, 0, -4.21)) # facing into the cockpit
 	for sx in [-1, 1]:

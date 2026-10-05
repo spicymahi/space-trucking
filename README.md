@@ -102,6 +102,12 @@ The self-test also audits the ship's colliders: every visible part bigger than a
 godot --headless --path . -- --audit
 ```
 
+To print the ship's collision shape count and the cost of its per-frame flight sweep:
+
+```sh
+godot --headless --path . -- --bench
+```
+
 To save screenshots of the main views into `captures/`, run with a display:
 
 ```sh
