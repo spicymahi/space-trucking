@@ -38,11 +38,6 @@ func can_take() -> bool:
 	return is_free() and is_supported()
 
 
-## A crate can't be lifted out from under another one.
-func is_buried() -> bool:
-	return above != null and above.occupant != null
-
-
 ## Links each slot to the one stacked directly on top of it.
 static func link_stacks(slots: Array[Slot]) -> void:
 	for a in slots:
@@ -55,3 +50,16 @@ static func link_stacks(slots: Array[Slot]) -> void:
 
 func describe() -> String:
 	return ("hold slot " if kind == "hold" else "pallet slot ") + slot_label
+
+
+## Lowers any crate left hanging over an emptied slot.
+static func settle(slots: Array[Slot]) -> void:
+	for s in slots:
+		var c := s.occupant
+		if c == null:
+			continue
+		var to := s
+		while to.below and to.below.is_free():
+			to = to.below
+		if to != s:
+			c.place_in(to)

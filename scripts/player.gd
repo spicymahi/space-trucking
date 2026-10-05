@@ -148,7 +148,33 @@ func _physics_process(delta: float) -> void:
 
 
 func _aim_mask() -> int:
-	return (Vox.L_WORLD | Vox.L_SHIP | Vox.L_SLOT) if carried else (Vox.L_WORLD | Vox.L_SHIP | Vox.L_CRATE | Vox.L_INTERACT)
+	if carried:
+		return Vox.L_WORLD | Vox.L_SHIP | Vox.L_SLOT | Vox.L_CRATE
+	return Vox.L_WORLD | Vox.L_SHIP | Vox.L_CRATE | Vox.L_INTERACT
+
+
+## Aiming anywhere at a stack (one of its slots, or a crate in it) targets the
+## lowest free slot in that stack, so you stack by pointing at the crate below.
+static func stack_target(hit: Object) -> Slot:
+	var s: Slot = null
+	if hit is Slot:
+		s = hit
+	elif hit is Crate:
+		s = hit.slot
+	if s == null:
+		return null
+	while s.below:
+		s = s.below
+	while s and not s.is_free():
+		s = s.above
+	return s
+
+
+## Aiming at any crate in a stack lifts the one on top.
+static func stack_top(c: Crate) -> Crate:
+	while c.slot and c.slot.above and c.slot.above.occupant:
+		c = c.slot.above.occupant
+	return c
 
 
 func _update_aim() -> void:
@@ -160,20 +186,23 @@ func _update_aim() -> void:
 	prompt = ""
 	if carried:
 		_update_beam()
-		if hit is Slot and hit.can_take():
-			_ghost.global_transform = hit.global_transform
+		var target := stack_target(hit)
+		if target:
+			_ghost.global_transform = target.global_transform
 			_ghost.visible = true
-			prompt = "Place crate in " + hit.describe()
-		elif hit is Slot and hit.is_free():
-			prompt = "Fill the slot underneath first"
-		elif hit is Slot:
-			prompt = "That slot is full"
+			prompt = "Place crate in " + target.describe()
+		elif hit is Slot or hit is Crate:
+			prompt = "That stack is full"
+		elif hit is Interactable:
+			prompt = hit.prompt
 		else:
-			prompt = "Aim at an empty slot in your hold or on the pallet"
-	elif hit is Crate and hit.slot and hit.slot.is_buried():
-		prompt = "Lift the crate on top first"
+			prompt = "Aim at a slot or a crate in your hold or on the pallet"
 	elif hit is Crate:
-		prompt = "Lift crate · " + hit.display_name()
+		var top := stack_top(hit)
+		if top != hit:
+			_ghost.global_transform = top.global_transform
+			_ghost.visible = true
+		prompt = "Lift crate · " + top.display_name()
 	elif hit is Interactable:
 		prompt = hit.prompt
 
@@ -193,17 +222,18 @@ func use() -> void:
 	ray.force_raycast_update()
 	var hit := ray.get_collider() if ray.is_colliding() else null
 	if carried:
-		if hit is Slot and hit.can_take():
-			place(hit)
-		elif hit is Slot and hit.is_free():
-			GameState.say("Fill the slot underneath first. Crates stack from the floor up.")
+		var target := stack_target(hit)
+		if target:
+			place(target)
+		elif hit is Interactable:
+			hit.interact(self)
+		elif hit is Slot or hit is Crate:
+			GameState.say("That stack is full. Try another slot.")
 		else:
-			GameState.say("Aim at a free hold or pallet slot to set the crate down.")
+			GameState.say("Aim at a slot or a crate in your hold or on the pallet to set the crate down.")
 		return
-	if hit is Crate and hit.slot and hit.slot.is_buried():
-		GameState.say("Lift the crate on top first.")
-	elif hit is Crate:
-		pick_up(hit)
+	if hit is Crate:
+		pick_up(stack_top(hit))
 	elif hit is Interactable:
 		hit.interact(self)
 
@@ -216,6 +246,16 @@ func pick_up(c: Crate) -> void:
 	c.set_carried(true)
 	carried = c
 	_carry_shape.disabled = false
+
+
+## Hands the carried crate over when it's sold at an exchange.
+func give_up_carried() -> void:
+	if carried:
+		carried.queue_free()
+	carried = null
+	_carry_shape.disabled = true
+	_beam.visible = false
+	_ghost.visible = false
 
 
 func place(s: Slot) -> void:

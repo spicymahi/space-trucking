@@ -163,7 +163,7 @@ func _on_terminal(st: Station, kind: String) -> void:
 	mode = "terminal"
 	player.set_physics_process(false)
 	player.set_process_unhandled_input(false)
-	hud.terminal.open(st)
+	hud.terminal.open(st, ship, player)
 
 
 func _on_terminal_closed() -> void:
@@ -194,7 +194,7 @@ func objective() -> String:
 	var hold := ship.hold_count()
 	if mode == "pilot" and ship.state == Ship.State.LANDED:
 		if ship.course_target == null:
-			return "Plot a course: press N / Y, press DIR to look up a station, key in its grid and press ENT."
+			return "Plot a course: press N / Y for the nav computer, press DIR to print a route slip, then key in its grid and press ENT."
 		return "Lift off with W / RT (or Space), fly out of the bay and follow the amber marker."
 	if mode == "pilot":
 		var st := ship.nearest_station()
@@ -212,11 +212,11 @@ func objective() -> String:
 			if s.occupant:
 				on_pallet += 1
 		if on_pallet > 0 and hold == 0 and bought_once:
-			return "Carry the crates from pallet 07-B into your ship's hold. Aim at a crate and press F / A."
+			return "Carry the crates from pallet 07-B into your ship's hold. Aim at a crate and press F / A. Aim at a crate in the hold to stack on it."
 		if on_pallet > 0 and hold > 0 and bought_once and here.station_id == "ceres_yard":
 			return "Keep loading, or board: walk to the pilot seat at the front of your ship."
 		if hold > 0 and here.station_id != "ceres_yard":
-			return "Unload your crates onto pallet 07-B, then sell them at the exchange."
+			return "Sell at the exchange in the concourse. Hold crates pay a 10% dock-crew fee; carry them to pallet 07-B for full price."
 		if on_pallet > 0 and hold == 0 and here.station_id != "ceres_yard":
 			return "Sell the crates on pallet 07-B at the exchange in the concourse."
 		if hold > 0:
@@ -254,6 +254,34 @@ func _walk_to(target: Vector3, max_frames := 900) -> bool:
 	return reached
 
 
+func _aim_at(p: Vector3) -> void:
+	var d := p - player.cam.global_position
+	player.rotation.y = atan2(-d.x, -d.z)
+	player._pitch = atan2(d.y, Vector2(d.x, d.z).length())
+	player.cam.rotation.x = player._pitch
+	await _frames(2)
+
+
+## Points the camera at a world point and presses F, like a player would.
+func _aim_use(p: Vector3) -> void:
+	await _aim_at(p)
+	await _press_key(KEY_F)
+
+
+## Presses and releases a physical key.
+func _press_key(k: Key) -> void:
+	var e := InputEventKey.new()
+	e.physical_keycode = k
+	e.keycode = k
+	e.pressed = true
+	Input.parse_input_event(e)
+	await _frames(2)
+	var u := e.duplicate()
+	u.pressed = false
+	Input.parse_input_event(u)
+	await _frames(2)
+
+
 func _selftest() -> void:
 	var ok := true
 	var ceres: Station = stations["ceres_yard"]
@@ -272,62 +300,109 @@ func _selftest() -> void:
 	var walked := await _walk_to(ceres.to_global(Vector3(0, 0, -62))) and await _walk_to(ceres.to_global(Vector3(4.6, 0, -68)))
 	ok = _check(walked, "walked from the pad through the concourse door to the exchange") and ok
 
-	# Buy 4 crates of water ice.
-	_on_terminal(ceres, "trade")
-	hud.terminal.sel = GameState.COMMODITY_ORDER.find("water_ice")
-	hud.terminal.qty = 4
-	var n := hud.terminal.buy_selected()
-	hud.terminal.close()
-	ok = _check(n == 4 and ceres.pallet_count("water_ice") == 4, "bought 4 water ice crates onto pallet 07-B") and ok
+	# Open the exchange by aiming at it and pressing F, then buy 4 ice with the keys.
+	await _aim_use(ceres.to_global(Vector3(6.6, 1.2, -68)))
+	ok = _check(mode == "terminal" and hud.terminal.visible, "opened the exchange by aiming at it and pressing F") and ok
+	while hud.terminal.selected() != "water_ice":
+		await _press_key(KEY_DOWN)
+	for k in 3:
+		await _press_key(KEY_D)
+	await _press_key(KEY_F)
+	await _press_key(KEY_ESCAPE)
+	ok = _check(mode == "foot" and ceres.pallet_count("water_ice") == 4, "bought 4 water ice with F and closed the exchange with Esc") and ok
 	ok = _check(GameState.credits < start, "credits went down after buying (%d -> %d)" % [start, GameState.credits]) and ok
 
-	# Load them into the hold. Carry the first one by walking: into the back wall
-	# (it must not pass through), then up the ramp into the hold.
-	var crates: Array[Crate] = []
-	for s in ceres.pallet_slots:
-		if s.occupant:
-			crates.append(s.occupant)
+	# Carry the first crate by walking: into the back wall (it must not pass
+	# through), then up the ramp into the hold, and set it down by aiming.
 	player.global_position = ceres.to_global(Vector3(18.8, 0, 2.6))
 	player.velocity = Vector3.ZERO
 	await _frames(5)
-	player.pick_up(crates[0])
+	var first := ceres.pallet_slots[0].occupant
+	await _aim_use(ceres.to_global(ceres.pallet_slots[0].position))
+	ok = _check(player.carried == first, "lifted a crate off the pallet by aiming at it") and ok
 	await _walk_to(ceres.to_global(Vector3(18.8, 0, -60)), 720)
-	var crate_z := ceres.to_local(crates[0].global_position).z
+	var crate_z := ceres.to_local(first.global_position).z
 	var half := Slot.CRATE_SIZE.z * Player.CARRY_SCALE / 2
 	ok = _check(crate_z - half > -49.65, "carried crate stops at the hangar wall instead of passing through (front at z %.2f, wall trim at -49.6)" % (crate_z - half)) and ok
 	walked = await _walk_to(ship.to_global(Vector3(0, -2, 28))) and await _walk_to(ship.to_global(Vector3(0, 0.3, 8)))
 	var in_hold := ship.to_local(player.global_position)
 	ok = _check(walked and absf(in_hold.y - 0.3) < 0.2, "walked up the ramp into the hold carrying a crate (hold floor height %.2f)" % in_hold.y) and ok
-	player.place(ship.hold_slots[0])
+	var hs := ship.hold_slots # L1-L4, R1-R4 on the floor; L5-L8, R5-R8 on top
+	await _walk_to(ship.to_global(Vector3(0, 0.3, 2.0)))
+	await _aim_use(ship.to_global(hs[0].position))
+	ok = _check(hs[0].occupant == first, "set the crate down in hold slot L1 by aiming at it") and ok
+
 	# Cockpit furniture is solid: walking at the dash stops short of it.
 	await _walk_to(ship.to_global(Vector3(0, 0.3, -2)))
-	await _walk_to(ship.to_global(Vector3(3.0, 0.3, -13)), 240)
+	await _walk_to(ship.to_global(Vector3(3.3, 0.3, -13)), 240)
 	var at_dash := ship.to_local(player.global_position)
-	ok = _check(at_dash.z > -11.0 and absf(at_dash.y - 0.3) < 0.2, "walked into the cockpit and stopped at the dash (z %.2f, front at -11.2)" % at_dash.z) and ok
-	for i in range(1, crates.size()):
-		player.pick_up(crates[i])
-		player.place(ship.hold_slots[i])
-	await _frames(2)
-	ok = _check(ship.hold_count() == 4 and ceres.pallet_count("water_ice") == 0, "moved 4 crates from the pallet into the hold") and ok
-	ok = _check(ship.hold_slots[0].occupant.get_parent() == ship, "hold crates are attached to the ship") and ok
-	ok = _check(ship.hold_slots[8].can_take() and not ship.hold_slots[12].can_take() and ship.hold_slots[12].is_free(), "upper hold slots only take a crate when the slot below is filled") and ok
+	ok = _check(at_dash.z > -11.0 and at_dash.z < -10.0 and absf(at_dash.y - 0.3) < 0.2, "walked into the cockpit and stopped at the dash (z %.2f, front at -11.2)" % at_dash.z) and ok
 
-	# Board and plot a course to Tharsis Ring on the keypad: X +024, Y +003, Z -068.
-	_on_seat()
-	ok = _check(mode == "pilot" and ship.piloted, "boarded the pilot seat") and ok
-	ship.enter_nav()
-	for k in ["0", "2", "4", "0", "0", "3", "+/-", "0", "6", "8", "ENT"]:
-		ship.nav.press(k)
-	ship.exit_nav()
-	ok = _check(ship.course_station == "tharsis_ring", "nav computer course set to Tharsis Ring from typed grid") and ok
+	# Stacking by aim: point at the crate you want to stack on.
+	await _fetch_from_pallet(ceres, 1)
+	await _aim_use(ship.to_global(hs[0].position))
+	ok = _check(hs[8].occupant != null and hs[8].below == hs[0], "aiming at the crate in L1 stacks the new one on top of it (L5)") and ok
+	await _fetch_from_pallet(ceres, 2, hs[1].position.z)
+	await _aim_use(ship.to_global(hs[9].position))
+	ok = _check(hs[1].occupant != null and hs[9].occupant == null, "aiming at an empty top slot drops the crate to the floor below it (L2)") and ok
+	await _fetch_from_pallet(ceres, 3, hs[1].position.z)
+	await _aim_at(ship.to_global(hs[8].position))
+	ok = _check(player.prompt == "That stack is full", "a full stack says so instead of taking the crate") and ok
+	await _aim_use(ship.to_global(hs[1].position))
+	ok = _check(hs[9].occupant != null and player.carried == null, "aiming at the crate in L2 stacks on it (L6)") and ok
+	var top := hs[8].occupant
+	await _aim_use(ship.to_global(hs[0].position))
+	ok = _check(player.carried == top and hs[0].occupant != null, "aiming at a bottom crate lifts the one on top of it") and ok
+	await _aim_use(ship.to_global(hs[0].position))
+	ok = _check(hs[8].occupant == top, "and it stacks back on by aiming at the bottom crate") and ok
+	ok = _check(ship.hold_count() == 4 and ceres.pallet_count("water_ice") == 0, "4 crates in the hold, 2 stacks of 2") and ok
 
-	# Lift off and fly forward with assist.
-	ship.take_off()
+	# Board by aiming at the seat and pressing F.
+	player.global_position = ship.to_global(Vector3(0, 0.3, -5.2))
+	await _frames(3)
+	await _aim_use(ship.to_global(Vector3(0, 1.3, -7.9)))
+	ok = _check(mode == "pilot" and ship.piloted, "boarded by aiming at the pilot seat and pressing F") and ok
+
+	# M jumps to the route printer; Esc goes back to the keypad; N closes it.
+	await _press_key(KEY_M)
+	ok = _check(ship.dir_mode, "M opens the route printer from the seat") and ok
+	await _press_key(KEY_ESCAPE)
+	ok = _check(ship.nav_mode and not ship.dir_mode, "Esc goes from the route printer back to the keypad") and ok
+	await _press_key(KEY_N)
+	ok = _check(not ship.nav_mode, "N closes the nav computer") and ok
+
+	# Plot a course the way a player does: N for the keypad, DIR (Tab) for the
+	# route printer, pick Tharsis Ring, print the slip, then key in its grid.
+	await _press_key(KEY_N)
+	await _press_key(KEY_TAB)
+	ok = _check(ship.dir_mode, "DIR on the keypad (Tab) swings over to the route printer") and ok
+	while ship.directory.station_ids()[ship.directory.sel] != "tharsis_ring":
+		await _press_key(KEY_S)
+	await _press_key(KEY_F)
+	var waited := 0
+	while ship.dir_mode and waited < 300:
+		await get_tree().physics_frame
+		waited += 1
+	var slip := ship.directory.slip
+	ok = _check(slip != null and slip.get_parent() == ship.slip_clip and slip.get_meta("station") == "tharsis_ring", "F prints a Tharsis Ring route slip that clips next to the keypad") and ok
+	ok = _check(ship.nav_mode and not ship.dir_mode, "after printing, the view returns to the keypad") and ok
+	var lines: PackedStringArray = (slip.get_node("Text") as Label3D).text.split("\n")
+	for axis in 3:
+		var field := lines[2 + axis].split(" ")[1] # e.g. "-068"
+		if field.begins_with("-"):
+			await _press_key(KEY_MINUS)
+		for ch in field.substr(1):
+			await _press_key(KEY_0 + int(ch))
+	await _press_key(KEY_ENTER)
+	ok = _check(ship.course_station == "tharsis_ring", "typed the grid off the slip (%s %s %s) and the course is set to Tharsis Ring" % [lines[2], lines[3], lines[4]]) and ok
+	await _press_key(KEY_N)
+
+	# Lift off with the throttle and fly forward with assist.
 	var p0 := ship.global_position
 	Input.action_press("throttle_up")
 	await _frames(90)
 	Input.action_release("throttle_up")
-	ok = _check(ship.state == Ship.State.FLYING and ship.global_position.distance_to(p0) > 20.0, "ship lifts off and flies forward (%.0f m)" % ship.global_position.distance_to(p0)) and ok
+	ok = _check(ship.state == Ship.State.FLYING and ship.global_position.distance_to(p0) > 20.0, "throttle lifts the ship off and flies it forward (%.0f m)" % ship.global_position.distance_to(p0)) and ok
 	await _frames(120)
 	ok = _check(ship.velocity.length() < 5.0, "flight assist brings the ship to a stop on release (%.1f m/s)" % ship.velocity.length()) and ok
 
@@ -368,28 +443,61 @@ func _selftest() -> void:
 	ok = _check(ship.state == Ship.State.LANDED and ship.landed_at == tharsis, "landing assist sets down on Tharsis pad 07") and ok
 	ok = _check(ship.hold_count() == 4, "cargo is still in the hold after the flight") and ok
 
-	# Leave the seat, unload to the pallet, sell.
-	_leave_seat()
+	# Leave the seat with F, then unload by hand: one crate walked down the ramp to
+	# the pallet, one stacked on it, one carried to the exchange, one left aboard.
+	await _press_key(KEY_F)
 	await _frames(10)
-	ok = _check(mode == "foot" and player.global_position.distance_to(ship.global_position) < 12.0, "left the seat and stand inside the ship") and ok
-	var free := tharsis.free_pallet_slots()
-	var i := 0
-	for s in ship.hold_slots:
-		if s.occupant:
-			player.pick_up(s.occupant)
-			player.place(free[i])
-			i += 1
-	ok = _check(tharsis.pallet_count("water_ice") == 4 and ship.hold_count() == 0, "unloaded 4 crates onto Tharsis pallet 07-B") and ok
+	ok = _check(mode == "foot" and player.global_position.distance_to(ship.global_position) < 12.0, "F leaves the seat; standing inside the ship") and ok
+	var tp := tharsis.pallet_slots
+	await _aim_use(ship.to_global(hs[0].position))
+	ok = _check(player.carried != null and hs[8].occupant == null, "lifted the top crate of the L1 stack") and ok
+	walked = await _walk_to(ship.to_global(Vector3(0, 0.3, 14))) and await _walk_to(ship.to_global(Vector3(0, -2, 26)))
+	walked = walked and await _walk_to(tharsis.to_global(Vector3(14, 0, -20))) and await _walk_to(tharsis.to_global(Vector3(18.2, 0, 0)))
+	await _aim_use(tharsis.to_global(tp[0].position))
+	ok = _check(walked and tp[0].occupant != null, "walked it down the ramp and set it on Tharsis pallet slot P1") and ok
+	player.global_position = ship.to_global(Vector3(1.4, 0.3, 0.6))
+	await _frames(3)
+	await _aim_use(ship.to_global(hs[0].position))
+	player.global_position = tharsis.to_global(Vector3(18.2, 0, 0))
+	await _frames(3)
+	await _aim_use(tharsis.to_global(tp[0].position))
+	ok = _check(tp[9].occupant != null and tp[9].below == tp[0], "stacked a second crate on the pallet by aiming at the first (P10)") and ok
+	player.global_position = ship.to_global(Vector3(1.4, 0.3, hs[1].position.z))
+	await _frames(3)
+	await _aim_use(ship.to_global(hs[1].position))
+	ok = _check(player.carried != null and hs[1].occupant != null and hs[9].occupant == null, "lifted the top crate of the L2 stack") and ok
+	walked = await _walk_to(ship.to_global(Vector3(0, 0.3, 14))) and await _walk_to(ship.to_global(Vector3(0, -2, 26)))
+	# (Stops a step short: the crate in your arms bumps the terminal before you do.)
+	walked = walked and await _walk_to(tharsis.to_global(Vector3(0, 0, -62))) and await _walk_to(tharsis.to_global(Vector3(3.4, 0, -68)))
+	ok = _check(walked and player.carried != null, "carried a crate from the hold to the Tharsis exchange") and ok
+
+	# Sell: aiming at the exchange with a crate in hand opens it, and R sells the
+	# ice in your hands and on the pallet at full price, and the hold for a fee.
 	var before := GameState.credits
-	_on_terminal(tharsis, "trade")
-	hud.terminal.sel = GameState.COMMODITY_ORDER.find("water_ice")
-	var earned := hud.terminal.sell_selected()
-	hud.terminal.close()
-	ok = _check(earned > 0 and GameState.credits == before + earned, "sold the ice for %d cr" % earned) and ok
+	await _aim_use(tharsis.to_global(Vector3(6.6, 1.2, -68)))
+	ok = _check(mode == "terminal" and hud.terminal.selected() == "water_ice", "the exchange opens with a crate in hand and picks the ice you brought") and ok
+	var q := hud.terminal.quote_all("water_ice")
+	await _press_key(KEY_R)
+	var earned := GameState.credits - before
+	ok = _check(earned == q["total"] and q["fee"] > 0 and earned > 0, "R sold all 4 ice for %d cr (dock crew fee %d on the 1 in the hold)" % [earned, q["fee"]]) and ok
+	ok = _check(ship.hold_count() == 0 and tharsis.pallet_count("water_ice") == 0 and player.carried == null, "hand, pallet and hold are all empty after the sale") and ok
+	await _press_key(KEY_ESCAPE)
 	ok = _check(GameState.credits > start, "profit on the run: %d -> %d cr" % [start, GameState.credits]) and ok
 
 	print("SELFTEST " + ("OK" if ok else "FAILED"))
 	get_tree().quit(0 if ok else 1)
+
+
+## Teleports beside Ceres pallet 07-B, lifts the crate in pallet slot i by aiming
+## at it, and steps into the hold aisle level with an L column (by its z).
+func _fetch_from_pallet(st: Station, i: int, column_z := 0.6) -> void:
+	# Stand in front of that slot: beside the pallet for the near column, else in front of its row.
+	var p := st.pallet_slots[i].position
+	player.global_position = st.to_global(Vector3(p.x - 2.6, 0, p.z) if p.x < 22.0 else Vector3(p.x, 0, p.z - 2.6))
+	await _frames(3)
+	await _aim_use(st.to_global(st.pallet_slots[i].position))
+	player.global_position = ship.to_global(Vector3(1.4, 0.3, column_z))
+	await _frames(3)
 
 
 # ---------------------------------------------------------------- screenshots
@@ -440,13 +548,23 @@ func _capture() -> void:
 		player.pick_up(crates[k])
 		player.place(ship.hold_slots[k])
 	player.pick_up(crates[3])
-	_look_from(ship.to_global(Vector3(0, 0.35, 12.5)), ship.to_global(ship.hold_slots[3].position))
+	# Stacking: aim at the crate in L1 and the ghost shows the slot on top of it.
+	_look_from(ship.to_global(Vector3(-0.2, 0.3, 2.6)), ship.to_global(ship.hold_slots[0].position + Vector3(0, 0.3, 0)))
+	await _frames(2)
 	player._update_aim()
 	await _shot("04_loading")
-	player.place(ship.hold_slots[3])
+	player.place(Player.stack_target(ship.hold_slots[0].occupant))
 	_on_seat()
 	await _shot("05_cockpit")
-	ship.enter_nav()
+	ship.enter_directory()
+	await get_tree().create_timer(0.5).timeout
+	while ship.directory.station_ids()[ship.directory.sel] != "tharsis_ring":
+		ship.directory.press("DOWN")
+	ship.directory.press("PRINT")
+	await get_tree().create_timer(0.62).timeout
+	await _shot("11_route_printer")
+	while ship.dir_mode:
+		await get_tree().process_frame
 	for k in ["0", "2", "4", "0", "0", "3", "+/-", "0", "6"]:
 		ship.nav.press(k)
 	await get_tree().create_timer(0.5).timeout
@@ -463,4 +581,10 @@ func _capture() -> void:
 	ship.global_position = tharsis.to_global(Vector3(10, 30, 420))
 	ship.look_at(tharsis.to_global(Vector3(0, 14, 0)))
 	await _shot("08_approach")
+	# Selling at Tharsis straight from the docked hold
+	ship.place_landed(tharsis)
+	_leave_seat()
+	player.set_physics_process(false)
+	_on_terminal(tharsis, "trade")
+	await _shot("12_exchange_sell")
 	get_tree().quit()

@@ -2,10 +2,12 @@ class_name NavComputer
 extends Node3D
 ## The cockpit nav computer: a physical keypad and an amber CRT.
 ## You key in a destination grid (X, Y, Z in units of 100 m) and press ENT to set a course.
+## DIR swings over to the station directory, which prints route slips with each grid.
 
 signal course_set(target: Vector3, station_id: String)
 signal exit_requested
 signal key_pressed(label: String)
+signal directory_requested
 
 const ROWS := [["7", "8", "9", "DIR"], ["4", "5", "6", "+/-"], ["1", "2", "3", "CLR"], ["<", "0", "ENT"]]
 const PITCH := 0.27
@@ -17,7 +19,6 @@ var active := false
 var fields: Array[String] = ["", "", ""]
 var signs: Array[int] = [1, 1, 1]
 var cur := 0
-var show_dir := false
 var status := "ENTER DESTINATION GRID"
 var course_station := ""
 var course_target = null # Vector3 or null
@@ -138,7 +139,6 @@ func press(key: String) -> void:
 		t.tween_property(mi, "position:y", -0.04, 0.05)
 		t.tween_property(mi, "position:y", 0.0, 0.08)
 	if key.is_valid_int():
-		show_dir = false
 		if fields[cur].length() < 3:
 			fields[cur] += key
 		if fields[cur].length() == 3 and cur < 2:
@@ -157,7 +157,7 @@ func press(key: String) -> void:
 				cur = 0
 				status = "ENTER DESTINATION GRID"
 			"DIR":
-				show_dir = not show_dir
+				directory_requested.emit()
 			"ENT":
 				_enter()
 	_refresh()
@@ -188,7 +188,7 @@ func _field_text(i: int) -> String:
 	var pad := 3 - fields[i].length()
 	var cursor := active and i == cur and fmod(_blink, 1.0) < 0.5
 	for p in pad:
-		s += "_" if not (cursor and p == 0) else "█"
+		s += " " if (cursor and p == 0) else "_"
 	return s
 
 
@@ -196,27 +196,20 @@ func _refresh() -> void:
 	if not screen:
 		return
 	var t := "NAV COMPUTER  MK-II\n"
-	if show_dir:
-		t += "STATION DIRECTORY\n------------------------------\n"
-		for id in GameState.STATIONS:
-			var g := GameState.station_grid(id)
-			t += "%-13s\n   X%s Y%s Z%s\n" % [GameState.station_name(id).to_upper(), GameState.format_grid(g.x), GameState.format_grid(g.y), GameState.format_grid(g.z)]
-		t += "------------------------------\nPRESS DIR TO GO BACK"
+	t += "------------------------------\nDESTINATION GRID (x100 M)\n"
+	for i in 3:
+		t += ("> " if i == cur and active else "  ") + ["X", "Y", "Z"][i] + "  " + _field_text(i) + "\n"
+	t += "------------------------------\n" + status + "\n"
+	if course_target != null:
+		t += "TO  " + (GameState.station_name(course_station).to_upper() if course_station != "" else "DEEP SPACE") + "\n"
+		var ship := get_parent()
+		if ship is Node3D:
+			t += "DIST %.2f KM\n" % [(course_target - (ship as Node3D).global_position).length() / 1000.0]
 	else:
-		t += "------------------------------\nDESTINATION GRID (x100 M)\n"
-		for i in 3:
-			t += ("> " if i == cur and active else "  ") + ["X", "Y", "Z"][i] + "  " + _field_text(i) + "\n"
-		t += "------------------------------\n" + status + "\n"
-		if course_target != null:
-			t += "TO  " + (GameState.station_name(course_station).to_upper() if course_station != "" else "DEEP SPACE") + "\n"
-			var ship := get_parent()
-			if ship is Node3D:
-				t += "DIST %.2f KM\n" % [(course_target - (ship as Node3D).global_position).length() / 1000.0]
-		else:
-			t += "DIR = STATION LIST\n"
+		t += "DIR = PRINT A ROUTE SLIP\n"
 	screen.set_text(t)
 
 
 func refresh_distance() -> void:
-	if course_target != null and not show_dir:
+	if course_target != null:
 		_refresh()

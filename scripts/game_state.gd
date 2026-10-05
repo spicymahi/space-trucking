@@ -5,6 +5,9 @@ signal toast(text: String)
 signal credits_changed(value: int)
 
 const CRATE_SCU := 2
+## Selling straight from a docked ship's hold costs a dock-crew fee. Crates you
+## carry to the pallet yourself, or sell from your hands, pay full price.
+const HOLD_SALE_FEE := 0.10
 
 const COMMODITIES := {
 	"water_ice": {"name": "Water Ice", "short": "ICE", "color": Color("9fe3ff")},
@@ -139,6 +142,23 @@ func sell(station_id: String, commodity: String, qty: int) -> int:
 	return earned
 
 
+## What selling qty crates would earn, after skipping the first `skip` sales
+## (prices soften with every crate sold). Doesn't change the market.
+func quote_sell(station_id: String, commodity: String, qty: int, skip := 0) -> int:
+	var p: int = market(station_id, commodity)["sell"]
+	var earned := 0
+	for i in skip + qty:
+		if i >= skip:
+			earned += p
+		p = maxi(1, int(floor(p * 0.985)))
+	return earned
+
+
+func pay_fee(amount: int) -> void:
+	credits -= amount
+	credits_changed.emit(credits)
+
+
 ## Best sell price for a commodity at any station other than here.
 func best_elsewhere(here: String, commodity: String) -> Dictionary:
 	var best := {"station": "", "price": 0}
@@ -168,6 +188,7 @@ func setup_input() -> void:
 	_bind("cancel", [_key(KEY_ESCAPE), _btn(JOY_BUTTON_B)])
 	_bind("pause", [_key(KEY_P), _btn(JOY_BUTTON_START)])
 	_bind("sell", [_key(KEY_R), _btn(JOY_BUTTON_X)])
+	_bind("nav_directory", [_key(KEY_M)])
 
 	# Flight
 	_bind("throttle_up", [_key(KEY_W), _axis(JOY_AXIS_TRIGGER_RIGHT, 1)])

@@ -27,6 +27,11 @@ const RAMP_HINGE := Vector3(0, 0.3, 16)
 const CAM_POS := Vector3(0, 2.55, -9.0)
 const CAM_PITCH := -10.0
 const NAV_PITCH := -54.0
+const CAM_FOV := 72.0
+## Directory view: lean toward the route printer, left of the keypad, and zoom in.
+const DIR_EYE := Vector3(-0.79, 2.34, -9.55)
+const DIR_LOOK := Vector3(-1.85, 0.7, -9.98)
+const DIR_FOV := 38.0
 
 var state := State.LANDED
 var piloted := false
@@ -43,6 +48,10 @@ var comms := "STANDING BY"
 
 var cam: Camera3D
 var nav: NavComputer
+var directory: NavDirectory
+var dir_mode := false
+var slip_clip: Node3D
+var _cam_tween: Tween
 var crt_scan: CrtScreen
 var crt_nav: CrtScreen
 var crt_cargo: CrtScreen
@@ -152,8 +161,9 @@ func _build_cockpit() -> void:
 	Vox.box(self, Vector3(0, 1.53, -12.4), Vector3(9.6, 0.06, 1.7), Vox.DBROWN)
 	for i in 10:
 		Vox.box(self, Vector3(-2.25 + i * 0.5, 1.57, -11.75), Vector3(0.25, 0.02, 0.12), Vox.MUSTARD if i % 2 == 0 else Color("1a1410"))
-	Vox.box(self, Vector3(0, 0.3, -10.3), Vector3(2.6, 0.1, 1.5), Vox.BEIGE3)
-	Vox.add_shape(self, Vector3(0, 0.5, -10.3), Vector3(2.6, 0.6, 1.5)) # keypad shelf: no walking over the keys
+	# Shelf for the keypad, the route printer (left) and the slip clipboard (right)
+	Vox.box(self, Vector3(-0.45, 0.3, -10.2), Vector3(4.0, 0.1, 1.7), Vox.BEIGE3)
+	Vox.add_shape(self, Vector3(-0.45, 0.5, -10.2), Vector3(4.0, 0.6, 1.7)) # no walking over the keys
 	# Canopy frame
 	for sx in [-1, 1]:
 		Vox.solid(self, Vector3(4.15 * sx, 3.9, -13.75), Vector3(0.7, 5.0, 0.5), Vox.DBROWN)
@@ -188,6 +198,24 @@ func _build_cockpit() -> void:
 	nav.build(crt_nav)
 	nav.course_set.connect(_on_course_set)
 	nav.exit_requested.connect(exit_nav)
+	nav.directory_requested.connect(enter_directory)
+	# Route printer and the clipboard its slips land on
+	slip_clip = Node3D.new()
+	slip_clip.name = "SlipClip"
+	slip_clip.position = Vector3(1.08, 0.58, -10.2)
+	slip_clip.rotation = Vector3(deg_to_rad(35), deg_to_rad(-15), 0)
+	add_child(slip_clip)
+	Vox.box(slip_clip, Vector3(0, -0.018, 0.0), Vector3(0.68, 0.025, 0.8), Vox.DBROWN)
+	Vox.box(slip_clip, Vector3(0, 0.012, -0.36), Vector3(0.28, 0.035, 0.07), Vox.MUSTARD)
+	Vox.box(slip_clip, Vector3(0, -0.15, -0.12), Vector3(0.4, 0.25, 0.35), Vox.DBROWN) # stand, under the board
+	directory = NavDirectory.new()
+	directory.position = Vector3(-1.9, 0.35, -10.0)
+	directory.rotation.y = deg_to_rad(68)
+	add_child(directory)
+	directory.clip = slip_clip
+	directory.build()
+	directory.exit_requested.connect(enter_nav)
+	directory.printed.connect(_on_slip_printed)
 	# Camera
 	cam = Camera3D.new()
 	cam.position = CAM_POS
@@ -197,6 +225,7 @@ func _build_cockpit() -> void:
 	cam.far = 60000
 	add_child(cam)
 	nav.camera = cam
+	directory.camera = cam
 
 
 # ---------------------------------------------------------------- states
@@ -269,19 +298,48 @@ func set_piloted(v: bool) -> void:
 
 func enter_nav() -> void:
 	nav_mode = true
+	dir_mode = false
+	directory.set_active(false)
 	nav.set_active(true)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	var t := create_tween()
-	t.tween_property(cam, "rotation_degrees:x", NAV_PITCH, 0.35).set_trans(Tween.TRANS_SINE)
+	_cam_to(CAM_POS, Vector3(NAV_PITCH, 0, 0), CAM_FOV)
+
+
+## The station directory and route printer, left of the keypad.
+func enter_directory() -> void:
+	nav_mode = true
+	dir_mode = true
+	nav.set_active(false)
+	directory.set_active(true)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	var d := DIR_LOOK - DIR_EYE
+	var look := Vector3(rad_to_deg(atan2(d.y, Vector2(d.x, d.z).length())), rad_to_deg(atan2(-d.x, -d.z)), 0)
+	_cam_to(DIR_EYE, look, DIR_FOV)
 
 
 func exit_nav() -> void:
 	nav_mode = false
+	dir_mode = false
 	nav.set_active(false)
+	directory.set_active(false)
 	if piloted:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	var t := create_tween()
-	t.tween_property(cam, "rotation_degrees:x", CAM_PITCH, 0.35).set_trans(Tween.TRANS_SINE)
+	_cam_to(CAM_POS, Vector3(CAM_PITCH, 0, 0), CAM_FOV)
+
+
+func _cam_to(pos: Vector3, rot_deg: Vector3, fov: float) -> void:
+	if _cam_tween:
+		_cam_tween.kill()
+	_cam_tween = create_tween().set_parallel().set_trans(Tween.TRANS_SINE)
+	_cam_tween.tween_property(cam, "position", pos, 0.35)
+	_cam_tween.tween_property(cam, "rotation_degrees", rot_deg, 0.35)
+	_cam_tween.tween_property(cam, "fov", fov, 0.35)
+
+
+func _on_slip_printed(station_id: String) -> void:
+	nav.status = "SLIP: KEY IN %s" % GameState.station_name(station_id).to_upper()
+	if dir_mode:
+		enter_nav()
 
 
 func _on_course_set(target: Vector3, station_id: String) -> void:
@@ -301,6 +359,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		mouse_turn = mouse_turn.limit_length(1.0)
 	elif event.is_action_pressed("nav_computer"):
 		enter_nav()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("nav_directory"):
+		enter_directory()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("interact"):
 		if state == State.LANDED:
@@ -451,6 +512,27 @@ func _update_lamps() -> void:
 	var st := nearest_station()
 	_set_lamp("DOCK", st != null and st.docking_granted)
 	_set_lamp("CRUISE", cruise)
+
+
+func hold_count_of(commodity: String) -> int:
+	var n := 0
+	for s in hold_slots:
+		if s.occupant and s.occupant.commodity == commodity:
+			n += 1
+	return n
+
+
+## Removes every crate of a commodity from the hold (sold by the dock crew).
+func take_from_hold(commodity: String) -> int:
+	var n := 0
+	for i in range(hold_slots.size() - 1, -1, -1):
+		var c := hold_slots[i].occupant
+		if c and c.commodity == commodity:
+			c.remove_from_slot()
+			c.queue_free()
+			n += 1
+	Slot.settle(hold_slots)
+	return n
 
 
 func hold_count() -> int:

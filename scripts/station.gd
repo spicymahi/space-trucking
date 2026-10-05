@@ -258,10 +258,7 @@ func take_from_pallet(commodity: String, qty: int) -> int:
 			c.remove_from_slot()
 			c.queue_free()
 			n += 1
-	# Lower anything left hanging over an emptied slot.
-	for s in pallet_slots:
-		if s.occupant and not s.is_supported():
-			s.occupant.place_in(s.below)
+	Slot.settle(pallet_slots)
 	return n
 
 
