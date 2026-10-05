@@ -113,6 +113,10 @@ const CLIENTS := {
 	"callisto_hub": ["Callisto Port Authority", "Hub Freight Exchange"],
 }
 
+## Markets move this share of the way back to their usual prices every MARKET_TICK seconds.
+const MARKET_RELAX := 0.04
+const MARKET_TICK := 6.0
+
 var credits: int = 1500
 var markets: Dictionary = {}
 var using_gamepad := false
@@ -125,6 +129,12 @@ var _next_job := 11
 var _turnover := OFFER_TURNOVER
 ## Off under the self-test, so its seeded boards don't re-roll mid-run.
 var turnover_enabled := true
+## Prices and NPC trades hold still while you're at a terminal, so the
+## quote on screen is the price you get.
+var market_hold := false
+## station id -> last few NPC trades there
+var traffic: Dictionary = {}
+var _relax_t := MARKET_TICK
 
 var font_crt: Font
 var font_label: Font
@@ -154,6 +164,11 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if not market_hold:
+		_relax_t -= delta
+		if _relax_t <= 0.0:
+			_relax_t = MARKET_TICK
+			relax_markets()
 	if not turnover_enabled:
 		return
 	_turnover -= delta
@@ -205,33 +220,74 @@ func market(station_id: String, commodity: String) -> Dictionary:
 
 ## Buys up to qty crates. Returns how many were bought.
 func buy(station_id: String, commodity: String, qty: int) -> int:
-	var m: Dictionary = market(station_id, commodity)
-	if m["buy"] <= 0 or m["stock"] <= 0:
-		return 0
-	var count := 0
-	while count < qty and m["stock"] > 0 and credits >= m["buy"]:
-		credits -= m["buy"]
-		m["stock"] -= 1
-		count += 1
-		# Supply gets tighter as you buy, so prices creep up.
-		m["buy"] = int(ceil(m["buy"] * 1.015))
-	if count > 0:
+	var r := market_buy(station_id, commodity, qty, credits)
+	if r["count"] > 0:
+		credits -= r["spent"]
 		credits_changed.emit(credits)
-	return count
+	return r["count"]
 
 
 ## Sells qty crates. Returns credits earned.
 func sell(station_id: String, commodity: String, qty: int) -> int:
+	var earned := market_sell(station_id, commodity, qty)
+	credits += earned
+	credits_changed.emit(credits)
+	return earned
+
+
+## Takes up to qty crates off a market for anyone with `budget` credits (you or
+## an NPC trader). Returns {"count", "spent"}.
+func market_buy(station_id: String, commodity: String, qty: int, budget: int) -> Dictionary:
+	var m: Dictionary = market(station_id, commodity)
+	var count := 0
+	var spent := 0
+	if m["buy"] <= 0:
+		return {"count": 0, "spent": 0}
+	while count < qty and m["stock"] > 0 and budget - spent >= m["buy"]:
+		spent += m["buy"]
+		m["stock"] -= 1
+		count += 1
+		# Supply gets tighter as anyone buys, so prices creep up.
+		m["buy"] = int(ceil(m["buy"] * 1.015))
+	return {"count": count, "spent": spent}
+
+
+## Puts qty crates on a market. Returns what it paid.
+func market_sell(station_id: String, commodity: String, qty: int) -> int:
 	var m: Dictionary = market(station_id, commodity)
 	var earned := 0
 	for i in qty:
 		earned += m["sell"]
 		m["stock"] += 1
-		# Demand softens as you flood the market.
+		# Demand softens as the market fills.
 		m["sell"] = maxi(1, int(floor(m["sell"] * 0.985)))
-	credits += earned
-	credits_changed.emit(credits)
 	return earned
+
+
+## Markets drift back toward their usual prices and stock: producers restock,
+## consumers use up what they bought, and prices relax.
+func relax_markets() -> void:
+	for id in markets:
+		for c in markets[id]:
+			var m: Dictionary = markets[id][c]
+			var base: Dictionary = START_MARKETS[id][c]
+			for k in ["buy", "sell"]:
+				if base[k] > 0:
+					var d: int = base[k] - m[k]
+					if d != 0:
+						m[k] += signi(d) * mini(absi(d), maxi(1, roundi(absi(d) * MARKET_RELAX)))
+			m["stock"] += signi(base["stock"] - m["stock"])
+			if m["buy"] > 0 and m["sell"] >= m["buy"]:
+				m["sell"] = m["buy"] - 1
+
+
+## A line on a station's traffic log, shown on its exchange.
+func log_traffic(station_id: String, text: String) -> void:
+	var lines: Array = traffic.get(station_id, [])
+	lines.append(text)
+	while lines.size() > 3:
+		lines.pop_front()
+	traffic[station_id] = lines
 
 
 ## What selling qty crates would earn, after skipping the first `skip` sales
@@ -352,6 +408,17 @@ func abandon_job(job_id: int) -> int:
 	var penalty := mini(int(round(j["reward"] * ABANDON_PENALTY)), maxi(0, credits))
 	pay_fee(penalty)
 	return penalty
+
+
+## An NPC trader takes a random offer off a station's board. Returns it, or empty.
+func npc_take_offer(station_id: String, r: RandomNumberGenerator) -> Dictionary:
+	var board: Array = offers[station_id]
+	if board.is_empty():
+		return {}
+	var j: Dictionary = board.pop_at(r.randi() % board.size())
+	_fill_board(station_id)
+	board_changed.emit(station_id)
+	return j
 
 
 func jobs_to(station_id: String) -> int:

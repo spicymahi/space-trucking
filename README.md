@@ -47,6 +47,16 @@ The **Contract Board** is the amber terminal past the exchange in every concours
 - You can hold four jobs at once. Press **R** twice on one of your jobs to abandon it. That costs a quarter of its pay, and the client takes its crates back.
 - Boards turn over: every three minutes each one drops its oldest offer and posts a new one.
 
+## Other haulers
+
+Six NPC freighters (KITE-4, MARIGOLD, OX-11, HERON-2, BULWARK and TANSY-9) run the same trade loop you do.
+
+- Each one buys the good that pays best for the trip, flies it to the buyer and sells it, so it moves the same prices and stock you see. Some take jobs off the contract boards, and an offer one of them takes is replaced with a new one.
+- They park on the berths on each station's roof and fly a lane 320 m above the stations, clear of the hangar mouths and the routes you fly.
+- Each exchange shows the last two things haulers did there, under TRAFFIC. Your flight HUD marks haulers within 6 km with their callsign and load.
+- Markets recover: every few seconds prices drift back toward each station's normal level and stock refills or clears by a crate.
+- Nothing trades while you're at a terminal, so the price on your screen holds.
+
 ## Controls
 
 | Action | Keyboard / mouse | Gamepad |
@@ -82,8 +92,7 @@ On the route printer, W/S (or the D-pad) picks a station and F (or A) prints its
 - Selling from the pallet, from your hands, or straight from the hold through the dock crew.
 - Prices that move as you buy and sell.
 - Hauling contracts at every station's contract board.
-
-NPC traders come next.
+- Six NPC haulers trading between the stations, and markets that recover over time.
 
 ## For developers
 
@@ -102,9 +111,11 @@ Everything is built in code from `scripts/`, so there are no large scene files t
 | `scripts/player.gd` | On-foot movement and the crate tractor tool |
 | `scripts/hud.gd`, `scripts/trade_terminal_ui.gd` | Flight overlay, prompts and the exchange screen |
 | `scripts/contract_terminal_ui.gd` | The contract board screen: sign, deliver and abandon jobs |
+| `scripts/npc_trader.gd` | An NPC hauler: its ship, trade planning and lane flight between roof berths |
+| `scripts/traffic.gd` | The NPC fleet: spawns the haulers and marks the roof berths |
 | `scripts/vox.gd`, `scripts/collider_audit.gd` | Box helpers (including `Vox.Batch`, which merges static boxes into one draw call) and the collider audit |
 
-A headless test plays the whole loop the way a player does, with aim, walking and key presses (buy, load and stack, sign a hauling job and carry its crates aboard, print a route slip, key it in, fly, cruise, dock, land, unload, sell, deliver the job, abandon another), and prints `SELFTEST OK`:
+A headless test plays the whole loop the way a player does, with aim, walking and key presses (buy, load and stack, sign a hauling job and carry its crates aboard, print a route slip, key it in, fly, cruise, dock, land, unload, sell, deliver the job, abandon another), then checks the NPC haulers' flight, trades and colliders, and prints `SELFTEST OK`:
 
 ```sh
 godot --headless --path . -- --selftest
