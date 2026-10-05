@@ -59,9 +59,10 @@ class FlightOverlay extends Control:
 				if not cam.is_position_behind(pad):
 					var ps := cam.unproject_position(pad)
 					draw_arc(ps, 30, 0, TAU, 32, Vox.PHOS_AMBER, 2)
-					# Left of the circle, unless that would cover the speed block; then right of it.
+					# Left of the circle, unless that would cover the speed block; then under it
+					# (right of it is where the station's name and distance go).
 					if Rect2(ps + Vector2(-136, -16), Vector2(100, 30)).intersects(_speed_rect(c)):
-						draw_string(f, ps + Vector2(36, 8), "PAD 07", HORIZONTAL_ALIGNMENT_LEFT, 100, 24, Vox.PHOS_AMBER)
+						draw_string(f, ps + Vector2(-50, 56), "PAD 07", HORIZONTAL_ALIGNMENT_CENTER, 100, 24, Vox.PHOS_AMBER)
 					else:
 						draw_string(f, ps + Vector2(-136, 8), "PAD 07", HORIZONTAL_ALIGNMENT_RIGHT, 100, 24, Vox.PHOS_AMBER)
 		# Course marker (amber diamond, or an edge arrow when off screen)

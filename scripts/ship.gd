@@ -148,10 +148,15 @@ func _build_cockpit() -> void:
 	l.light_color = Color("ffd9a0")
 	add_child(l)
 	# Seat (the cockpit art builds the chair itself)
-	var seat := Interactable.new("Fly ship", Vector3(2.3, 2.2, 1.6)) # wide enough to take in the throttle quadrant
+	# Keep the use box inside the armrests: the aim ray ignores an area the eye is standing in.
+	var seat := Interactable.new("Fly ship", Vector3(1.6, 2.2, 1.6))
 	seat.position = Vector3(0, 1.3, -7.9)
 	add_child(seat)
 	seat.used.connect(func(_by): pilot_seat_used.emit())
+	var throttle := Interactable.new("Fly ship", Vector3(0.3, 0.75, 0.5)) # the throttle quadrant
+	throttle.position = Vector3(0.98, 0.65, -8.3)
+	add_child(throttle)
+	throttle.used.connect(func(_by): pilot_seat_used.emit())
 	# CRTs, set into the monitor housings Cockpit builds
 	crt_scan = CrtScreen.new(Cockpit.SCREEN, Vector2i(512, 384), Vox.PHOS_GREEN, 28, false)
 	crt_nav = CrtScreen.new(Cockpit.SCREEN, Vector2i(512, 384), Vox.PHOS_AMBER, 28, false)
