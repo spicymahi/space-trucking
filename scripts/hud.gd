@@ -5,6 +5,7 @@ extends CanvasLayer
 
 var main: Node
 var terminal: TradeTerminalUI
+var contracts: ContractTerminalUI
 var _prompt: Label
 var _toast: Label
 var _objective: Label
@@ -147,6 +148,8 @@ func setup(p_main: Node) -> void:
 
 	terminal = TradeTerminalUI.new()
 	add_child(terminal)
+	contracts = ContractTerminalUI.new()
+	add_child(contracts)
 
 	_pause = _build_pause()
 	add_child(_pause)
@@ -271,6 +274,8 @@ func _process(delta: float) -> void:
 		if ship.landed_at:
 			where = ship.landed_at.display_name.to_upper()
 		_wrist.text = "CR %s\nHOLD %02d/32 SCU\n%s · PAD 07" % [GameState.money(GameState.credits), ship.hold_count() * GameState.CRATE_SCU, where]
+		if not GameState.jobs.is_empty():
+			_wrist.text += "\nJOBS %d/%d" % [GameState.jobs.size(), GameState.MAX_ACTIVE_JOBS]
 	_hints.visible = mode != "terminal"
 	if mode == "foot":
 		_hints.text = "LS walk · RS look · A use · Start pause" if g else "WASD walk · Mouse look · F use · Esc pause"

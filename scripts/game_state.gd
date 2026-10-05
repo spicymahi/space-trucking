@@ -3,6 +3,7 @@ extends Node
 
 signal toast(text: String)
 signal credits_changed(value: int)
+signal board_changed(station_id: String)
 
 const CRATE_SCU := 2
 ## Selling straight from a docked ship's hold costs a dock-crew fee. Crates you
@@ -32,6 +33,24 @@ const STATIONS := {
 		"accent": Color("3d8c87"),
 		"blurb": "Mars orbital farm and fab yard",
 	},
+	"vesta_forge": {
+		"name": "Vesta Forge",
+		"position": Vector3(-7400, 400, 1600),
+		"accent": Color("c8432f"),
+		"blurb": "Ore smelter and machine shop",
+	},
+	"europa_deep": {
+		"name": "Europa Deep",
+		"position": Vector3(-9600, -400, -3600),
+		"accent": Color("4f7fb5"),
+		"blurb": "Ice drillers and research labs",
+	},
+	"callisto_hub": {
+		"name": "Callisto Hub",
+		"position": Vector3(-4200, -200, -10200),
+		"accent": Color("8a5fb0"),
+		"blurb": "Habitat ring and free port",
+	},
 }
 
 ## Starting prices per crate. "buy" is what the player pays, "sell" is what the station pays.
@@ -50,11 +69,62 @@ const START_MARKETS := {
 		"machine_parts": {"buy": 480, "sell": 420, "stock": 20},
 		"med_supplies": {"buy": 980, "sell": 880, "stock": 8},
 	},
+	"vesta_forge": {
+		"water_ice": {"buy": 0, "sell": 150, "stock": 0},
+		"iron_ore": {"buy": 0, "sell": 160, "stock": 0},
+		"hydro_food": {"buy": 0, "sell": 230, "stock": 0},
+		"machine_parts": {"buy": 400, "sell": 350, "stock": 30},
+		"med_supplies": {"buy": 0, "sell": 1150, "stock": 0},
+	},
+	"europa_deep": {
+		"water_ice": {"buy": 60, "sell": 48, "stock": 60},
+		"iron_ore": {"buy": 0, "sell": 120, "stock": 0},
+		"hydro_food": {"buy": 0, "sell": 290, "stock": 0},
+		"machine_parts": {"buy": 0, "sell": 650, "stock": 0},
+		"med_supplies": {"buy": 900, "sell": 800, "stock": 12},
+	},
+	"callisto_hub": {
+		"water_ice": {"buy": 0, "sell": 170, "stock": 0},
+		"iron_ore": {"buy": 0, "sell": 95, "stock": 0},
+		"hydro_food": {"buy": 140, "sell": 120, "stock": 40},
+		"machine_parts": {"buy": 0, "sell": 720, "stock": 0},
+		"med_supplies": {"buy": 0, "sell": 1320, "stock": 0},
+	},
+}
+
+## Hauling contracts. Each board keeps OFFERS_PER_BOARD jobs posted, at least
+## one to every other station. A job's crates belong to the client: they can't
+## be sold at an exchange, only delivered to the job's destination.
+const OFFERS_PER_BOARD := 5
+const MAX_ACTIVE_JOBS := 4
+## Every this many seconds each board drops its oldest offer and posts a new one.
+const OFFER_TURNOVER := 180.0
+## Abandoning a job costs this share of its reward.
+const ABANDON_PENALTY := 0.25
+## Reward per crate is (JOB_BASE + km * JOB_PER_KM) times the commodity's value factor.
+const JOB_BASE := 25.0
+const JOB_PER_KM := 12.0
+const JOB_VALUE := {"water_ice": 1.0, "iron_ore": 1.0, "hydro_food": 1.15, "machine_parts": 1.3, "med_supplies": 1.5}
+const CLIENTS := {
+	"ceres_yard": ["Ceres Mining Co-op", "Belt Ice Partners"],
+	"tharsis_ring": ["Tharsis Agri-Collective", "Red Sands Fab"],
+	"vesta_forge": ["Vesta Smelting Works", "Forge Union 9"],
+	"europa_deep": ["Europa Research Trust", "Deep Bore Drilling"],
+	"callisto_hub": ["Callisto Port Authority", "Hub Freight Exchange"],
 }
 
 var credits: int = 1500
 var markets: Dictionary = {}
 var using_gamepad := false
+var rng := RandomNumberGenerator.new()
+## station id -> Array of offer dictionaries (see make_job)
+var offers: Dictionary = {}
+## Jobs the player has signed, in signing order.
+var jobs: Array[Dictionary] = []
+var _next_job := 11
+var _turnover := OFFER_TURNOVER
+## Off under the self-test, so its seeded boards don't re-roll mid-run.
+var turnover_enabled := true
 
 var font_crt: Font
 var font_label: Font
@@ -62,6 +132,15 @@ var font_label: Font
 
 func _ready() -> void:
 	markets = START_MARKETS.duplicate(true)
+	# Fixed seed under the self-test so its job boards are the same every run.
+	if "--selftest" in OS.get_cmdline_user_args():
+		rng.seed = 42
+		turnover_enabled = false
+	else:
+		rng.randomize()
+	for id in STATIONS:
+		offers[id] = []
+		_fill_board(id)
 	font_crt = load("res://assets/fonts/VT323-Regular.ttf")
 	font_label = load("res://assets/fonts/Oswald-Variable.ttf")
 	setup_input()
@@ -72,6 +151,19 @@ func _input(event: InputEvent) -> void:
 		using_gamepad = true
 	elif event is InputEventKey or event is InputEventMouseButton:
 		using_gamepad = false
+
+
+func _process(delta: float) -> void:
+	if not turnover_enabled:
+		return
+	_turnover -= delta
+	if _turnover <= 0.0:
+		_turnover = OFFER_TURNOVER
+		for id in offers:
+			if not offers[id].is_empty():
+				offers[id].pop_front()
+			_fill_board(id)
+			board_changed.emit(id)
 
 
 func say(text: String) -> void:
@@ -169,6 +261,101 @@ func best_elsewhere(here: String, commodity: String) -> Dictionary:
 		if p > best["price"]:
 			best = {"station": id, "price": p}
 	return best
+
+
+# ---------------------------------------------------------------- contracts
+
+func station_distance_km(a: String, b: String) -> float:
+	return (STATIONS[a]["position"] as Vector3).distance_to(STATIONS[b]["position"]) / 1000.0
+
+
+## A new hauling offer from `origin` to `dest`. The cargo is something origin
+## makes when it can, and the client pays more for distance and for valuable goods.
+func make_job(origin: String, dest: String) -> Dictionary:
+	var made: Array = []
+	for c in COMMODITY_ORDER:
+		if START_MARKETS[origin][c]["buy"] > 0:
+			made.append(c)
+	var c: String = made[rng.randi() % made.size()] if not made.is_empty() else COMMODITY_ORDER[rng.randi() % COMMODITY_ORDER.size()]
+	var crates := rng.randi_range(1, 6)
+	var per: float = (JOB_BASE + station_distance_km(origin, dest) * JOB_PER_KM) * float(JOB_VALUE[c])
+	var clients: Array = CLIENTS[origin]
+	var job := {
+		"id": _next_job,
+		"origin": origin,
+		"dest": dest,
+		"commodity": c,
+		"crates": crates,
+		"reward": int(round(per * crates / 10.0)) * 10,
+		"client": clients[rng.randi() % clients.size()],
+	}
+	_next_job += 1
+	return job
+
+
+## Tops a board up to OFFERS_PER_BOARD, posting first to stations it has no offer for.
+func _fill_board(id: String) -> void:
+	var board: Array = offers[id]
+	while board.size() < OFFERS_PER_BOARD:
+		var missing: Array = []
+		var others: Array = []
+		for d in STATIONS:
+			if d == id:
+				continue
+			others.append(d)
+			if not board.any(func(o): return o["dest"] == d):
+				missing.append(d)
+		var pool := missing if not missing.is_empty() else others
+		board.append(make_job(id, pool[rng.randi() % pool.size()]))
+
+
+func job(id: int) -> Dictionary:
+	for j in jobs:
+		if j["id"] == id:
+			return j
+	return {}
+
+
+## Signs an offer from a station's board. The caller spawns its crates.
+func accept_job(station_id: String, job_id: int) -> Dictionary:
+	if jobs.size() >= MAX_ACTIVE_JOBS:
+		return {}
+	var board: Array = offers[station_id]
+	for i in board.size():
+		if board[i]["id"] == job_id:
+			var j: Dictionary = board[i]
+			board.remove_at(i)
+			jobs.append(j)
+			_fill_board(station_id)
+			return j
+	return {}
+
+
+## Pays out a delivered job, less the dock crew's fee. Returns credits earned.
+func complete_job(job_id: int, fee: int) -> int:
+	var j := job(job_id)
+	if j.is_empty():
+		return 0
+	jobs.erase(j)
+	credits += j["reward"] - fee
+	credits_changed.emit(credits)
+	return j["reward"] - fee
+
+
+## Cancels a signed job and charges the penalty. Returns the penalty.
+func abandon_job(job_id: int) -> int:
+	var j := job(job_id)
+	if j.is_empty():
+		return 0
+	jobs.erase(j)
+	# Never takes you below zero.
+	var penalty := mini(int(round(j["reward"] * ABANDON_PENALTY)), maxi(0, credits))
+	pay_fee(penalty)
+	return penalty
+
+
+func jobs_to(station_id: String) -> int:
+	return jobs.filter(func(j): return j["dest"] == station_id).size()
 
 
 # ---------------------------------------------------------------- input

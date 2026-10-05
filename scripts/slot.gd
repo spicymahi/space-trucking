@@ -63,3 +63,25 @@ static func settle(slots: Array[Slot]) -> void:
 			to = to.below
 		if to != s:
 			c.place_in(to)
+
+
+## Crates in these slots that belong to a job.
+static func count_job(slots: Array[Slot], job_id: int) -> int:
+	var n := 0
+	for s in slots:
+		if s.occupant and s.occupant.job_id == job_id:
+			n += 1
+	return n
+
+
+## Removes a job's crates from these slots (top layer first) and settles the rest.
+static func take_job(slots: Array[Slot], job_id: int) -> int:
+	var n := 0
+	for i in range(slots.size() - 1, -1, -1):
+		var c := slots[i].occupant
+		if c and c.job_id == job_id:
+			c.remove_from_slot()
+			c.queue_free()
+			n += 1
+	settle(slots)
+	return n

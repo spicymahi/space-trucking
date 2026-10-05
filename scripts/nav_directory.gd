@@ -32,7 +32,7 @@ func build() -> void:
 	tag.outline_size = 0
 	# Tube housing and screen, lying back toward the pilot
 	Vox.box(self, Vector3(0, 0.31, -0.18), Vector3(0.84, 0.1, 0.42), Vox.BEIGE2)
-	screen = CrtScreen.new(Vector2(0.7, 0.4), Vector2i(480, 274), Vox.PHOS_GREEN, 30)
+	screen = CrtScreen.new(Vector2(0.7, 0.4), Vector2i(480, 274), Vox.PHOS_GREEN, 22)
 	screen.position = Vector3(0, 0.4, -0.15)
 	screen.rotation.x = deg_to_rad(-64)
 	add_child(screen)
@@ -131,12 +131,13 @@ func _refresh() -> void:
 	if not screen:
 		return
 	var g := GameState.using_gamepad
-	var t := "STATION DIRECTORY\n"
+	var t := "STATION DIRECTORY" + ("   * JOB" if not GameState.jobs.is_empty() else "") + "\n"
 	var ids := station_ids()
 	for i in ids.size():
 		var km := _distance_km(ids[i])
 		var where := "HERE" if km < 1.5 else "%.1f KM" % km
-		t += "%s %-14s%8s\n" % [">" if i == sel else " ", GameState.station_name(ids[i]).to_upper(), where]
+		var job := "*" if GameState.jobs_to(ids[i]) > 0 else " "
+		t += "%s%s%-14s%8s\n" % [">" if i == sel else " ", job, GameState.station_name(ids[i]).to_upper(), where]
 	var grid := GameState.station_grid(ids[sel])
 	t += "-------------------------\nGRID %s %s %s\n" % [GameState.format_grid(grid.x), GameState.format_grid(grid.y), GameState.format_grid(grid.z)]
 	if status != "":

@@ -111,7 +111,7 @@ func selected() -> String:
 
 ## Crates of a good you could sell here: in your hands, on pallet 07-B, in your docked hold.
 func counts(c: String) -> Dictionary:
-	var hand := 1 if player and player.carried and player.carried.commodity == c else 0
+	var hand := 1 if player and player.carried and player.carried.commodity == c and player.carried.job_id == 0 else 0
 	var hold := ship.hold_count_of(c) if ship and ship.landed_at == station else 0
 	return {"hand": hand, "pad": station.pallet_count(c), "hold": hold}
 
