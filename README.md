@@ -36,6 +36,17 @@ You start on foot on pad 07 at Ceres Yard, behind your ship, the Kestrel-9.
    - The dock crew unloads anything still in your hold, for a 10% fee.
    - Crates you carry over yourself, or set on pallet 07-B first, sell at full price. A crate in your hands sells too.
 
+## Hauling contracts
+
+The **Contract Board** is the amber terminal past the exchange in every concourse. Press **F** to use it.
+
+- Each board posts five jobs, with at least one to every other station. Pick one with **W/S** and press **F** to sign it. Its crates appear on pallet 07-B for free, with a mustard **JOB** band.
+- Load them into your hold like any cargo and fly to the job's destination. The route printer marks job destinations with `*`.
+- At the destination's contract board, press **F** on the job to deliver it. Every crate must be there: in your hands, on pallet 07-B, or in your docked hold. The dock crew charges 10% of the hold crates' share of the pay.
+- Job crates belong to the client. The exchange won't buy them.
+- You can hold four jobs at once. Press **R** twice on one of your jobs to abandon it. That costs a quarter of its pay, and the client takes its crates back.
+- Boards turn over: every three minutes each one drops its oldest offer and posts a new one.
+
 ## Controls
 
 | Action | Keyboard / mouse | Gamepad |
@@ -55,6 +66,7 @@ You start on foot on pad 07 at Ceres Yard, behind your ship, the Kestrel-9.
 | Request docking / land | L | X |
 | Cruise | C | L3 |
 | Sell all of a good (exchange) | R | X |
+| Abandon a job (contract board, press twice) | R | X |
 
 On the nav computer, you can type digits directly, or click the keys, or move with the D-pad and press A. Enter is ENT, Tab is DIR, Backspace deletes a digit and X (or Delete) is CLR.
 
@@ -62,15 +74,16 @@ On the route printer, W/S (or the D-pad) picks a station and F (or A) prints its
 
 ## What is in this build
 
-- One star system with two stations, Ceres Yard and Tharsis Ring. The plan is about five.
+- One star system with five stations: Ceres Yard, Tharsis Ring, Vesta Forge, Europa Deep and Callisto Hub. Each one makes some goods and pays well for others.
 - Assisted flight with cruise, docking clearance and an autoland onto the pad.
 - A walkable hangar, concourse and commodity exchange.
 - Cargo crates that snap into a 16-slot hold grid, stacked two high, and an 18-slot pallet by each pad.
 - A route printer in the cockpit that prints each station's grid on a slip you can read while you key it in.
 - Selling from the pallet, from your hands, or straight from the hold through the dock crew.
 - Prices that move as you buy and sell.
+- Hauling contracts at every station's contract board.
 
-Contracts (the terminal is there, but marked offline), NPC traders and the other stations come next.
+NPC traders come next.
 
 ## For developers
 
@@ -79,7 +92,7 @@ Everything is built in code from `scripts/`, so there are no large scene files t
 | File | What it does |
 | --- | --- |
 | `scripts/main.gd` | World setup, mode switching (on foot, piloting, terminal), self-test and screenshot capture |
-| `scripts/game_state.gd` | Autoload with credits, markets, stations and input bindings |
+| `scripts/game_state.gd` | Autoload with credits, markets, stations, contract offers and jobs, and input bindings |
 | `scripts/ship.gd` | The ship: hull, hold, cockpit, assisted flight, cruise, docking |
 | `scripts/nav_computer.gd` | The physical keypad and nav CRT |
 | `scripts/nav_directory.gd` | The route printer: station list, printed slips and the slip clipboard |
@@ -87,8 +100,9 @@ Everything is built in code from `scripts/`, so there are no large scene files t
 | `scripts/station.gd` | Station hull, hangar, pad, pallet and concourse |
 | `scripts/player.gd` | On-foot movement and the crate tractor tool |
 | `scripts/hud.gd`, `scripts/trade_terminal_ui.gd` | Flight overlay, prompts and the exchange screen |
+| `scripts/contract_terminal_ui.gd` | The contract board screen: sign, deliver and abandon jobs |
 
-A headless test plays the whole loop the way a player does, with aim, walking and key presses (buy, load and stack, print a route slip, key it in, fly, cruise, dock, land, unload, sell), and prints `SELFTEST OK`:
+A headless test plays the whole loop the way a player does, with aim, walking and key presses (buy, load and stack, sign a hauling job and carry its crates aboard, print a route slip, key it in, fly, cruise, dock, land, unload, sell, deliver the job, abandon another), and prints `SELFTEST OK`:
 
 ```sh
 godot --headless --path . -- --selftest

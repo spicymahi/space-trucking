@@ -514,20 +514,21 @@ func _update_lamps() -> void:
 	_set_lamp("CRUISE", cruise)
 
 
+## Your own crates of a commodity in the hold (job crates aren't yours to sell).
 func hold_count_of(commodity: String) -> int:
 	var n := 0
 	for s in hold_slots:
-		if s.occupant and s.occupant.commodity == commodity:
+		if s.occupant and s.occupant.commodity == commodity and s.occupant.job_id == 0:
 			n += 1
 	return n
 
 
-## Removes every crate of a commodity from the hold (sold by the dock crew).
+## Removes every crate of a commodity you own from the hold (sold by the dock crew).
 func take_from_hold(commodity: String) -> int:
 	var n := 0
 	for i in range(hold_slots.size() - 1, -1, -1):
 		var c := hold_slots[i].occupant
-		if c and c.commodity == commodity:
+		if c and c.commodity == commodity and c.job_id == 0:
 			c.remove_from_slot()
 			c.queue_free()
 			n += 1
