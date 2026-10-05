@@ -29,8 +29,8 @@ const CAM_PITCH := -10.0
 const NAV_PITCH := -54.0
 const CAM_FOV := 72.0
 ## Directory view: lean toward the route printer, left of the keypad, and zoom in.
-const DIR_EYE := Vector3(-0.79, 2.34, -9.55)
-const DIR_LOOK := Vector3(-1.85, 0.7, -9.98)
+const DIR_EYE := Vector3(-0.79, 2.43, -9.55)
+const DIR_LOOK := Vector3(-1.85, 0.79, -9.98)
 const DIR_FOV := 38.0
 
 var state := State.LANDED
@@ -148,7 +148,7 @@ func _build_cockpit() -> void:
 	l.light_color = Color("ffd9a0")
 	add_child(l)
 	# Seat (the cockpit art builds the chair itself)
-	var seat := Interactable.new("Fly ship", Vector3(1.6, 2.2, 1.6))
+	var seat := Interactable.new("Fly ship", Vector3(2.3, 2.2, 1.6)) # wide enough to take in the throttle quadrant
 	seat.position = Vector3(0, 1.3, -7.9)
 	add_child(seat)
 	seat.used.connect(func(_by): pilot_seat_used.emit())
@@ -163,7 +163,8 @@ func _build_cockpit() -> void:
 		add_child(c)
 	# Keypad
 	nav = NavComputer.new()
-	nav.position = Vector3(0, 0.47, -10.15)
+	# The keypad, slip clip and printer sit on the cockpit desk (top at y 0.44, see Cockpit._desk).
+	nav.position = Vector3(0, 0.56, -10.15)
 	nav.rotation.x = deg_to_rad(12)
 	add_child(nav)
 	nav.build(crt_nav)
@@ -173,14 +174,14 @@ func _build_cockpit() -> void:
 	# Route printer and the clipboard its slips land on
 	slip_clip = Node3D.new()
 	slip_clip.name = "SlipClip"
-	slip_clip.position = Vector3(1.08, 0.58, -10.2)
+	slip_clip.position = Vector3(1.08, 0.67, -10.2)
 	slip_clip.rotation = Vector3(deg_to_rad(35), deg_to_rad(-15), 0)
 	add_child(slip_clip)
 	Vox.box(slip_clip, Vector3(0, -0.018, 0.0), Vector3(0.68, 0.025, 0.8), Vox.DBROWN)
 	Vox.box(slip_clip, Vector3(0, 0.012, -0.36), Vector3(0.28, 0.035, 0.07), Vox.MUSTARD)
 	Vox.box(slip_clip, Vector3(0, -0.15, -0.12), Vector3(0.4, 0.25, 0.35), Vox.DBROWN) # stand, under the board
 	directory = NavDirectory.new()
-	directory.position = Vector3(-1.9, 0.35, -10.0)
+	directory.position = Vector3(-1.9, 0.44, -10.0)
 	directory.rotation.y = deg_to_rad(68)
 	add_child(directory)
 	directory.clip = slip_clip

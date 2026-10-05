@@ -241,8 +241,8 @@ func _audit_ship() -> bool:
 ## `-- --audit`: only the collider audit, for quick checks while building art.
 func _audit_only() -> void:
 	await _frames(5)
-	_check(_audit_ship(), "ship collider audit")
-	get_tree().quit()
+	var ok := _check(_audit_ship(), "ship collider audit")
+	get_tree().quit(0 if ok else 1)
 
 
 func _check(ok: bool, what: String) -> bool:
@@ -577,6 +577,8 @@ func _capture() -> void:
 	await _shot("13_cockpit_walkin")
 	_look_from(ship.to_global(Vector3(3.6, 0.3, -9.6)), ship.to_global(Vector3(-1.0, 1.6, -12.4)))
 	await _shot("14_cockpit_dash")
+	_look_from(ship.to_global(Vector3(1.8, 0.3, -9.4)), ship.to_global(Vector3(0, 2.4, -4.2)))
+	await _shot("15_cockpit_door")
 	_on_seat()
 	await _shot("05_cockpit")
 	ship.enter_directory()

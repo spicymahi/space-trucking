@@ -8,6 +8,7 @@ extends RefCounted
 const TOL := 0.08
 const SMALL := 0.15 # boxes under this on every side (knobs, levers, needles) need no collider
 const INSET := 0.03
+const STEP := 0.5 # largest spacing between sample points
 
 
 ## Returns a list of problems (empty when clean). Skips crates and the subtrees in `skip`.
@@ -59,11 +60,14 @@ static func _uncovered(a: Array, others: Array, n: int):
 	var h: Vector3 = a[1]
 	var near: Array = others.filter(func(o): return (o[2] as AABB).intersects(a[2]))
 	var invs: Array = near.map(func(o): return (o[0] as Transform3D).affine_inverse())
-	for i in n:
-		for j in n:
-			for k in n:
-				var f := Vector3(i, j, k) / float(n - 1) * 2.0 - Vector3.ONE
-				var q := Vector3(maxf(h.x - INSET, 0.0) * f.x, maxf(h.y - INSET, 0.0) * f.y, maxf(h.z - INSET, 0.0) * f.z)
+	var r := Vector3(maxf(h.x - INSET, 0.0), maxf(h.y - INSET, 0.0), maxf(h.z - INSET, 0.0))
+	# At least n points per axis, and no more than STEP apart, so a gap in a long box is found.
+	var c := Vector3i(_count(r.x, n), _count(r.y, n), _count(r.z, n))
+	for i in c.x:
+		for j in c.y:
+			for k in c.z:
+				var f := Vector3(i / float(c.x - 1), j / float(c.y - 1), k / float(c.z - 1)) * 2.0 - Vector3.ONE
+				var q := r * f
 				var p := t * q
 				var inside := false
 				for m in near.size():
@@ -75,6 +79,10 @@ static func _uncovered(a: Array, others: Array, n: int):
 				if not inside:
 					return p
 	return null
+
+
+static func _count(half: float, n: int) -> int:
+	return maxi(n, ceili(half * 2.0 / STEP) + 1)
 
 
 static func _v(v: Vector3) -> String:

@@ -311,7 +311,7 @@ func _walls(b: Vox.Batch) -> void:
 			lamp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			Vox.add_shape(ship, lamp.position, Vector3(0.1, 0.36, 0.7))
 	# Hazard trim round the hold door (outside its 2.6 m opening)
-	b.frame = Transform3D(Basis.IDENTITY, Vector3(0, 0, -4.21))
+	b.frame = Transform3D(Basis(Vector3.UP, PI), Vector3(0, 0, -4.21)) # facing into the cockpit
 	for sx in [-1, 1]:
 		for i in 10:
 			b.box(Vector3(1.39 * sx, 0.43 + i * 0.26, 0), Vector3(0.16, 0.26, 0.02), Vox.MUSTARD if i % 2 == 0 else Vox.DBROWN)
