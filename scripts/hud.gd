@@ -22,6 +22,10 @@ class FlightOverlay extends Control:
 	func _process(_d: float) -> void:
 		queue_redraw()
 
+	## Screen area of the speed and mode text, left of the crosshair at c.
+	func _speed_rect(c: Vector2) -> Rect2:
+		return Rect2(c + Vector2(-430, -20), Vector2(200, 70))
+
 	func _draw() -> void:
 		var ship: Ship = hud.main.ship
 		if not ship.piloted or ship.nav_mode:
@@ -33,8 +37,9 @@ class FlightOverlay extends Control:
 		draw_arc(c, 12, 0, TAU, 24, g, 2)
 		draw_line(c + Vector2(-34, 0), c + Vector2(-18, 0), g, 2)
 		draw_line(c + Vector2(18, 0), c + Vector2(34, 0), g, 2)
-		draw_string(f, Vector2(size.x / 2 - 330, size.y / 2 + 50), "%03d M/S" % int(ship.velocity.length()), HORIZONTAL_ALIGNMENT_LEFT, 200, 34, g)
-		draw_string(f, Vector2(size.x / 2 + 130, size.y / 2 + 50), ship.mode_text(), HORIZONTAL_ALIGNMENT_RIGHT, 200, 34, g)
+		# Speed and mode sit left of the crosshair (inside _speed_rect), above the gauge hood and clear of the pad label.
+		draw_string(f, c + Vector2(-430, 11), "%03d M/S" % int(ship.velocity.length()), HORIZONTAL_ALIGNMENT_RIGHT, 200, 34, g)
+		draw_string(f, c + Vector2(-430, 41), ship.mode_text(), HORIZONTAL_ALIGNMENT_RIGHT, 200, 26, g)
 		# Stations
 		for st in ship.stations:
 			if st == ship.landed_at:
@@ -54,7 +59,12 @@ class FlightOverlay extends Control:
 				if not cam.is_position_behind(pad):
 					var ps := cam.unproject_position(pad)
 					draw_arc(ps, 30, 0, TAU, 32, Vox.PHOS_AMBER, 2)
-					draw_string(f, ps + Vector2(-136, 8), "PAD 07", HORIZONTAL_ALIGNMENT_RIGHT, 100, 24, Vox.PHOS_AMBER)
+					# Left of the circle, unless that would cover the speed block; then under it
+					# (right of it is where the station's name and distance go).
+					if Rect2(ps + Vector2(-136, -16), Vector2(100, 30)).intersects(_speed_rect(c)):
+						draw_string(f, ps + Vector2(-50, 56), "PAD 07", HORIZONTAL_ALIGNMENT_CENTER, 100, 24, Vox.PHOS_AMBER)
+					else:
+						draw_string(f, ps + Vector2(-136, 8), "PAD 07", HORIZONTAL_ALIGNMENT_RIGHT, 100, 24, Vox.PHOS_AMBER)
 		# Course marker (amber diamond, or an edge arrow when off screen)
 		if ship.course_target != null:
 			var t: Vector3 = ship.course_target

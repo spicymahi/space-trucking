@@ -53,6 +53,8 @@ func build() -> void:
 	name = "Player"
 	collision_layer = Vox.L_PLAYER
 	collision_mask = Vox.L_WORLD | Vox.L_SHIP | Vox.L_CRATE | Vox.L_BARRIER
+	# Keep this under ~53 deg: that is the angle at which the capsule meets the 0.14 m cockpit
+	# desk edge (Cockpit._desk). Raise it and the player can walk up onto the desk and keypad.
 	floor_max_angle = deg_to_rad(50)
 	floor_snap_length = 0.4
 	var cs := CollisionShape3D.new()
