@@ -22,6 +22,11 @@ const TURN := Vector3(1.1, 0.9, 1.8)
 const LAND_MAX_SPEED := 14.0
 const DOCK_RANGE := 5000.0
 const CRUISE_MIN_DIST := 1500.0
+## Cruise ignores the station you just left until you're this far out, since
+## a course behind it leads back past it.
+const DEPART_CLEAR := 3000.0
+## ...but only while your line of flight misses it by more than this.
+const DEPART_MISS := 200.0
 const RAMP_LEN := 8.0
 const RAMP_HINGE := Vector3(0, 0.3, 16)
 const CAM_POS := Vector3(0, 2.55, -9.0)
@@ -40,6 +45,7 @@ var cruise := false
 var ang := Vector3.ZERO
 var mouse_turn := Vector2.ZERO
 var landed_at: Station = null
+var departed_from: Station = null
 var stations: Array[Station] = []
 var hold_slots: Array[Slot] = []
 var course_target = null # Vector3 or null
@@ -250,6 +256,7 @@ func _set_landed(st: Station) -> void:
 	ang = Vector3.ZERO
 	cruise = false
 	landed_at = st
+	departed_from = null
 	_set_ramp(true)
 	_set_engines(false)
 	comms = st.display_name.to_upper() + " PAD 07 · LANDED"
@@ -259,6 +266,7 @@ func _set_landed(st: Station) -> void:
 func take_off() -> void:
 	if landed_at:
 		landed_at.docking_granted = false
+	departed_from = landed_at
 	landed_at = null
 	state = State.FLYING
 	_set_ramp(false)
@@ -438,6 +446,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _fly(delta: float) -> void:
+	if departed_from and global_position.distance_to(departed_from.global_position) > DEPART_CLEAR:
+		departed_from = null
 	var fwd := 0.0
 	var strafe := 0.0
 	var vert := 0.0
@@ -469,7 +479,14 @@ func _fly(delta: float) -> void:
 			# Drop out near the course target, or near a station we are closing on,
 			# never near the one we are leaving.
 			var st := nearest_station()
-			var near_st := st != null and global_position.distance_to(st.global_position) < CRUISE_DROP_DIST \
+			# The station you left only counts while your line of flight runs
+			# into it, so turning back on it still drops you out before impact.
+			var ignore_dep := false
+			if departed_from and velocity.length() > 1.0:
+				var to_dep := departed_from.global_position - global_position
+				ignore_dep = to_dep.cross(velocity.normalized()).length() > DEPART_MISS
+			var near_st := st != null and not (st == departed_from and ignore_dep) \
+				and global_position.distance_to(st.global_position) < CRUISE_DROP_DIST \
 				and velocity.dot(st.global_position - global_position) > 0.0
 			var near_target: bool = course_target != null and global_position.distance_to(course_target) < CRUISE_DROP_DIST
 			if near_st or near_target:
@@ -495,20 +512,21 @@ func _update_lamps() -> void:
 	_set_lamp("CRUISE", cruise)
 
 
+## Your own crates of a commodity in the hold (job crates aren't yours to sell).
 func hold_count_of(commodity: String) -> int:
 	var n := 0
 	for s in hold_slots:
-		if s.occupant and s.occupant.commodity == commodity:
+		if s.occupant and s.occupant.commodity == commodity and s.occupant.job_id == 0:
 			n += 1
 	return n
 
 
-## Removes every crate of a commodity from the hold (sold by the dock crew).
+## Removes every crate of a commodity you own from the hold (sold by the dock crew).
 func take_from_hold(commodity: String) -> int:
 	var n := 0
 	for i in range(hold_slots.size() - 1, -1, -1):
 		var c := hold_slots[i].occupant
-		if c and c.commodity == commodity:
+		if c and c.commodity == commodity and c.job_id == 0:
 			c.remove_from_slot()
 			c.queue_free()
 			n += 1

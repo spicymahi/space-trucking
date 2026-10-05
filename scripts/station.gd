@@ -1,7 +1,7 @@
 class_name Station
 extends Node3D
 ## A station built from voxel blocks: hangar with landing pad 07 and a cargo pallet,
-## and a concourse with the commodity exchange and the (offline) contracts board.
+## and a concourse with the commodity exchange and the contract board.
 ## Local axes: +Y up, the hangar mouth faces +Z.
 
 signal terminal_used(station: Station, kind: String)
@@ -187,7 +187,7 @@ func _terminal(pos: Vector3, kind: String, title: String, screen: Color, prompt:
 	Vox.box(t, Vector3(0, 1.45, 0.53), Vector3(1.2, 0.84, 0.02), screen.darkened(0.82), true)
 	for i in 5:
 		Vox.box(t, Vector3(-0.5 + i * 0.25, 0.8, 0.55), Vector3(0.18, 0.12, 0.1), Vox.ORANGE if i == 0 else Vox.BEIGE3)
-	var txt := "> " + title + "\n" + ("BUY · SELL · PRICES" if kind == "trade" else "5 JOBS POSTED")
+	var txt := "> " + title + "\n" + ("BUY · SELL · PRICES" if kind == "trade" else "HAULING JOBS")
 	Vox.label(t, txt, Vector3(0, 1.5, 0.56), 0.0024, screen, GameState.font_crt)
 	Vox.label(t, title, Vector3(0, 2.36, 0.51), 0.0045, Vox.DBROWN, GameState.font_label)
 	var it := Interactable.new(prompt, Vector3(1.9, 2.4, 1.1), true)
@@ -238,10 +238,11 @@ func free_pallet_slots() -> Array[Slot]:
 	return out
 
 
+## Your own crates of a commodity on the pallet (job crates aren't yours to sell).
 func pallet_count(commodity: String) -> int:
 	var n := 0
 	for s in pallet_slots:
-		if s.occupant and s.occupant.commodity == commodity:
+		if s.occupant and s.occupant.commodity == commodity and s.occupant.job_id == 0:
 			n += 1
 	return n
 
@@ -253,7 +254,7 @@ func take_from_pallet(commodity: String, qty: int) -> int:
 		var s := pallet_slots[i]
 		if n >= qty:
 			break
-		if s.occupant and s.occupant.commodity == commodity:
+		if s.occupant and s.occupant.commodity == commodity and s.occupant.job_id == 0:
 			var c := s.occupant
 			c.remove_from_slot()
 			c.queue_free()
@@ -262,10 +263,10 @@ func take_from_pallet(commodity: String, qty: int) -> int:
 	return n
 
 
-func spawn_on_pallet(commodity: String, qty: int) -> int:
+func spawn_on_pallet(commodity: String, qty: int, job_id := 0) -> int:
 	var free := free_pallet_slots()
 	var n := mini(qty, free.size())
 	for i in n:
-		var c := Crate.create(commodity)
+		var c := Crate.create(commodity, job_id)
 		c.place_in(free[i])
 	return n
