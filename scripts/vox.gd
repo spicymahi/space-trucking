@@ -26,6 +26,9 @@ const L_BARRIER := 16
 const L_SLOT := 32
 const L_INTERACT := 64
 const L_KEYPAD := 128
+## Colliders inside a ship (cockpit furniture, hold fittings): the player bumps into them, but
+## they sit on their own body so the ship's flight sweep never tests them.
+const L_INTERIOR := 256
 
 static var _mats := {}
 static var _vmat: StandardMaterial3D
@@ -43,12 +46,14 @@ class Batch:
 		[Vector3.BACK, Vector3.RIGHT, Vector3.UP], [Vector3.FORWARD, Vector3.UP, Vector3.RIGHT],
 	]
 	var body: CollisionObject3D
+	var collider: CollisionObject3D # where shapes go; the body unless set
 	var frame := Transform3D.IDENTITY
 	var boxes: Array = [] # [Transform3D, Vector3 size] in body space
 	var _st := SurfaceTool.new()
 
 	func _init(p_body: CollisionObject3D) -> void:
 		body = p_body
+		collider = p_body
 		_st.begin(Mesh.PRIMITIVE_TRIANGLES)
 
 	func box(pos: Vector3, size: Vector3, color: Color, basis := Basis.IDENTITY) -> void:
@@ -75,7 +80,7 @@ class Batch:
 	## Collider only, in frame space.
 	func shape(pos: Vector3, size: Vector3, basis := Basis.IDENTITY) -> void:
 		var t := frame * Transform3D(basis, pos)
-		Vox.add_shape(body, t.origin, size, t.basis)
+		Vox.add_shape(collider, t.origin, size, t.basis)
 
 	func commit(node_name := "VoxBatch") -> MeshInstance3D:
 		var mi := MeshInstance3D.new()

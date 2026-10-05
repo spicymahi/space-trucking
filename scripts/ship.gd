@@ -52,6 +52,8 @@ var course_target = null # Vector3 or null
 var course_station := ""
 var comms := "STANDING BY"
 
+## Interior-only colliders (L_INTERIOR), off the ship's own swept shapes.
+var interior: StaticBody3D
 var cam: Camera3D
 var nav: NavComputer
 var directory: NavDirectory
@@ -78,6 +80,13 @@ func build() -> void:
 	collision_layer = Vox.L_SHIP
 	collision_mask = Vox.L_WORLD
 	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
+	# Its layer is one the player collides with and the ship does not, so it never
+	# collides with the ship's own floor (which a child body on L_WORLD would).
+	interior = StaticBody3D.new()
+	interior.name = "Interior"
+	interior.collision_layer = Vox.L_INTERIOR
+	interior.collision_mask = 0
+	add_child(interior)
 	_build_hull()
 	_build_hold()
 	_build_cockpit()
@@ -89,7 +98,8 @@ func _build_hull() -> void:
 	Vox.solid(self, Vector3(0, 0, 1), Vector3(10, 0.6, 30), Vox.BEIGE3)
 	for sx in [-1, 1]:
 		Vox.solid(self, Vector3(5.2 * sx, 3.4, 1), Vector3(0.6, 6.8, 30), Vox.BEIGE)
-		Vox.solid(self, Vector3(3.15 * sx, 3.4, -4), Vector3(3.7, 6.8, 0.4), Vox.BEIGE2)
+		Vox.box(self, Vector3(3.15 * sx, 3.4, -4), Vector3(3.7, 6.8, 0.4), Vox.BEIGE2) # bulkhead, hold to cockpit
+		Vox.add_shape(interior, Vector3(3.15 * sx, 3.4, -4), Vector3(3.7, 6.8, 0.4))
 		Vox.solid(self, Vector3(4.6 * sx, 3.9, -14), Vector3(1.2, 5.0, 0.4), Vox.BEIGE)
 		Vox.box(self, Vector3(5.55 * sx, 4.2, 1), Vector3(0.1, 1.0, 30), Vox.ORANGE)
 		Vox.box(self, Vector3(5.55 * sx, 3.4, 1), Vector3(0.1, 0.35, 30), Vox.MUSTARD)
@@ -102,7 +112,8 @@ func _build_hull() -> void:
 			# Foot collider stops 5 cm short of the pad so a landed ship isn't touching it.
 			Vox.add_shape(self, Vector3(3.5 * sx, -1.825, z), Vector3(1.4, 0.25, 1.4))
 	Vox.solid(self, Vector3(0, 6.8, 1), Vector3(11, 0.6, 30), Vox.BEIGE)
-	Vox.solid(self, Vector3(0, 4.85, -4), Vector3(2.6, 3.9, 0.4), Vox.BEIGE2)
+	Vox.box(self, Vector3(0, 4.85, -4), Vector3(2.6, 3.9, 0.4), Vox.BEIGE2)
+	Vox.add_shape(interior, Vector3(0, 4.85, -4), Vector3(2.6, 3.9, 0.4))
 	Vox.solid(self, Vector3(0, 0.9, -14), Vector3(10.4, 1.2, 0.4), Vox.BEIGE)
 	Vox.solid(self, Vector3(0, 0.9, -15), Vector3(8, 1.6, 1.6), Vox.BEIGE2) # top stays under the gauge hood from the seat
 	Vox.box(self, Vector3(0, 1.2, -15.82), Vector3(8, 0.3, 0.05), Vox.ORANGE)
@@ -121,7 +132,8 @@ func _build_hull() -> void:
 
 func _build_hold() -> void:
 	for x in [-2.5, 2.5]:
-		Vox.solid(self, Vector3(x, 6.45, 5), Vector3(0.6, 0.15, 18), Vox.LAMP, true)
+		Vox.box(self, Vector3(x, 6.45, 5), Vector3(0.6, 0.15, 18), Vox.LAMP, true)
+		Vox.add_shape(interior, Vector3(x, 6.45, 5), Vector3(0.6, 0.15, 18))
 	var l := OmniLight3D.new()
 	l.position = Vector3(0, 5.6, 5)
 	l.omni_range = 16

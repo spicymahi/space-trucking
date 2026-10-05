@@ -23,6 +23,10 @@ void sky() {
 }
 """
 
+## Collision shapes on the ship body itself, which every flight step sweeps. A new one is a
+## deliberate choice: interior fittings belong on ship.interior.
+const SHIP_SWEPT_SHAPES := 28
+
 var stations := {}
 var ship: Ship
 var player: Player
@@ -71,6 +75,8 @@ func _ready() -> void:
 		_capture.call_deferred()
 	elif "--audit" in args:
 		_audit_only.call_deferred()
+	elif "--bench" in args:
+		_bench.call_deferred()
 
 
 func _build_environment() -> void:
@@ -255,12 +261,52 @@ func objective() -> String:
 # ---------------------------------------------------------------- self test
 
 func _audit_ship() -> bool:
-	var problems := ColliderAudit.run(ship)
+	var problems := ColliderAudit.run(ship, [], [ship.interior])
 	for p in problems.slice(0, 25):
 		print("      ", p)
 	if problems.size() > 25:
 		print("      ... and %d more" % (problems.size() - 25))
 	return problems.is_empty()
+
+
+## `-- --bench`: the ship's collision shape count and the cost of its per-frame sweep
+## (a test_move, as move_and_slide does), landed on the pad and in open space.
+func _bench() -> void:
+	await _frames(5)
+	var n := 0
+	for c in ship.get_children():
+		if c is CollisionShape3D:
+			n += 1
+	print("ship collision shapes: %d" % n)
+	for where in ["pad", "open space"]:
+		if where == "open space":
+			ship.take_off()
+			ship.global_position += Vector3(0, 3000, 0)
+		await _frames(3)
+		var t0 := Time.get_ticks_usec()
+		for i in 2000:
+			ship.test_move(ship.global_transform, ship.global_basis * Vector3(0, 0.05, -0.6))
+		print("sweep (%s): %.1f us" % [where, (Time.get_ticks_usec() - t0) / 2000.0])
+	get_tree().quit()
+
+
+## The cockpit fittings are on the interior body, which nothing outside collides with,
+## so the window glass on the ship body must stop things before they reach the cabin.
+func _window_sealed() -> bool:
+	var ball := PhysicsShapeQueryParameters3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = 0.15
+	ball.shape = sphere
+	ball.collision_mask = Vox.L_SHIP
+	var space := get_world_3d().direct_space_state
+	for dir: Vector3 in [Vector3.BACK, Vector3(1, 0, 1).normalized(), Vector3(-1, 0, 1).normalized(), Vector3(0, -0.5, 1).normalized()]:
+		var from := ship.to_global(Vector3(0, 3.0, -13.85) - dir * 20)
+		ball.transform = Transform3D(Basis.IDENTITY, from)
+		ball.motion = ship.global_basis * dir * 30
+		var r := space.cast_motion(ball)
+		if r[0] >= 1.0 or ship.to_local(from + ball.motion * r[0]).z > -13.4:
+			return false
+	return true
 
 
 ## `-- --audit`: only the collider audit, for quick checks while building art.
@@ -338,6 +384,9 @@ func _selftest() -> void:
 	ok = _check(ship.state == Ship.State.LANDED and ship.landed_at == ceres, "ship starts landed at Ceres Yard") and ok
 	ok = _check(mode == "foot" and player.is_on_floor(), "player starts on foot, standing on the hangar floor") and ok
 	ok = _check(_audit_ship(), "every visible part of the ship has a matching collider, and every collider is visible") and ok
+	var swept := ship.get_children().filter(func(c): return c is CollisionShape3D).size()
+	ok = _check(swept == SHIP_SWEPT_SHAPES, "the ship's flight sweep tests %d shapes (expected %d; cockpit and hold fittings are on the interior body)" % [swept, SHIP_SWEPT_SHAPES]) and ok
+	ok = _check(_window_sealed(), "a ball thrown at the windscreen stops at the glass, from ahead and from 45 degrees") and ok
 
 	# Walk test: player moves under gravity without falling through.
 	var y0 := player.global_position.y
