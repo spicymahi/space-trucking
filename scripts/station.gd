@@ -9,6 +9,9 @@ signal terminal_used(station: Station, kind: String)
 const PAD_CENTER := Vector3(0, 0, 5)
 const PAD_HALF := 15.0
 const LANDED_HEIGHT := 2.0
+## Roof berths where NPC traders park, on the roof top (y = 44), clear of the
+## mast and the roof housing.
+const NPC_BERTHS := [Vector3(36, 44, -36), Vector3(36, 44, -12), Vector3(36, 44, 12)]
 
 var station_id := ""
 var display_name := ""
@@ -16,6 +19,7 @@ var accent := Vox.ORANGE
 var docking_granted := false
 var pallet_slots: Array[Slot] = []
 var hull: StaticBody3D
+var berth_taken: Array = [null, null, null]
 
 
 static func create(id: String) -> Station:
@@ -270,3 +274,32 @@ func spawn_on_pallet(commodity: String, qty: int, job_id := 0) -> int:
 		var c := Crate.create(commodity, job_id)
 		c.place_in(free[i])
 	return n
+
+
+# ---------------------------------------------------------------- NPC berths
+
+## Takes a free roof berth for an NPC trader. Returns its index, or -1 if all are taken.
+func claim_berth(npc: Node) -> int:
+	for i in berth_taken.size():
+		if berth_taken[i] == npc:
+			return i
+	for i in berth_taken.size():
+		if berth_taken[i] == null:
+			berth_taken[i] = npc
+			return i
+	return -1
+
+
+func release_berth(npc: Node) -> void:
+	for i in berth_taken.size():
+		if berth_taken[i] == npc:
+			berth_taken[i] = null
+
+
+func berth_position(i: int) -> Vector3:
+	return NPC_BERTHS[i] + Vector3(0, NpcTrader.PARKED_Y, 0)
+
+
+## Where a parked NPC trader sits, nose toward the hangar mouth's side (+Z).
+func berth_transform(i: int) -> Transform3D:
+	return global_transform * Transform3D(Basis(Vector3.UP, PI), berth_position(i))

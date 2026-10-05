@@ -254,6 +254,10 @@ func _refresh() -> void:
 	var best := GameState.best_elsewhere(sid, c)
 	if best["station"] != "":
 		t += "BEST KNOWN SELL: %s PAYS %d\n" % [GameState.station_name(best["station"]).to_upper(), best["price"]]
+	# The last two things other haulers did here.
+	var traffic: Array = GameState.traffic.get(sid, [])
+	for i in range(maxi(0, traffic.size() - 2), traffic.size()):
+		t += "[color=#5fae6e]%s %s[/color]\n" % ["TRAFFIC:" if i == maxi(0, traffic.size() - 2) else "        ", traffic[i]]
 	t += message
 	_text.text = t
 	_hint.text = ("D-pad select · LB/RB quantity · A buy · X sell all · B close" if g

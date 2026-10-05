@@ -66,6 +66,15 @@ class FlightOverlay extends Control:
 						draw_string(f, ps + Vector2(-50, 56), "PAD 07", HORIZONTAL_ALIGNMENT_CENTER, 100, 24, Vox.PHOS_AMBER)
 					else:
 						draw_string(f, ps + Vector2(-136, 8), "PAD 07", HORIZONTAL_ALIGNMENT_RIGHT, 100, 24, Vox.PHOS_AMBER)
+		# Other haulers: a small tick, callsign and load, within 6 km
+		for n in hud.main.traffic.npcs:
+			var np: Vector3 = n.global_position
+			var nd := ship.global_position.distance_to(np)
+			if nd > 6000 or cam.is_position_behind(np):
+				continue
+			var ns := cam.unproject_position(np)
+			draw_polyline(PackedVector2Array([ns + Vector2(-9, -6), ns + Vector2(0, 8), ns + Vector2(9, -6), ns + Vector2(-9, -6)]), g, 2)
+			draw_string(f, ns + Vector2(14, 0), "%s %s %.1f KM" % [n.callsign, n.status_text(), nd / 1000.0], HORIZONTAL_ALIGNMENT_LEFT, -1, 18, g)
 		# Course marker (amber diamond, or an edge arrow when off screen)
 		if ship.course_target != null:
 			var t: Vector3 = ship.course_target

@@ -27,6 +27,7 @@ var stations := {}
 var ship: Ship
 var player: Player
 var hud: Hud
+var traffic: Traffic
 var mode := "foot" # foot, pilot, terminal
 var bought_once := false
 
@@ -39,6 +40,10 @@ func _ready() -> void:
 		stations[id] = st
 		st.terminal_used.connect(_on_terminal)
 	_build_backdrop()
+	traffic = Traffic.new()
+	traffic.name = "Traffic"
+	add_child(traffic)
+	traffic.setup(stations.values(), 42 if "--selftest" in OS.get_cmdline_user_args() else randi())
 
 	ship = Ship.new()
 	ship.build()
@@ -67,6 +72,8 @@ func _ready() -> void:
 		_selftest.call_deferred()
 	elif "--selftest-depart" in args:
 		_selftest_depart.call_deferred()
+	elif "--selftest-npc" in args:
+		_selftest_npc.call_deferred()
 	elif "--capture" in args:
 		_capture.call_deferred()
 	elif "--audit" in args:
@@ -163,6 +170,7 @@ func _on_terminal(st: Station, kind: String) -> void:
 		GameState.say("Your ship must be landed on pad 07 here to %s." % ("trade" if kind == "trade" else "take or deliver jobs"))
 		return
 	mode = "terminal"
+	GameState.market_hold = true
 	player.set_physics_process(false)
 	player.set_process_unhandled_input(false)
 	if kind == "contracts":
@@ -172,6 +180,7 @@ func _on_terminal(st: Station, kind: String) -> void:
 
 
 func _on_terminal_closed() -> void:
+	GameState.market_hold = false
 	bought_once = true
 	mode = "foot"
 	player.set_physics_process(true)
@@ -675,9 +684,54 @@ func _selftest() -> void:
 
 	ok = await _departure_test() and ok
 	ok = await _turn_back_test() and ok
+	ok = await _npc_test() and ok
 
 	print("SELFTEST " + ("OK" if ok else "FAILED"))
 	get_tree().quit(0 if ok else 1)
+
+
+## Runs only the NPC trader checks.
+func _selftest_npc() -> void:
+	await _frames(10)
+	var ok := await _npc_test(150.0)
+	print("SELFTEST " + ("OK" if ok else "FAILED"))
+	get_tree().quit(0 if ok else 1)
+
+
+## NPC traders: they build like the rest of the world, and over the game time
+## so far (plus `seconds` more) they buy, fly the lane and sell.
+func _npc_test(seconds := 0.0) -> bool:
+	var ok := true
+	var npc: NpcTrader = traffic.npcs[0]
+	var audit := ColliderAudit.run(npc)
+	ok = _check(audit.is_empty(), "NPC hauler colliders match what you see%s" % ("" if audit.is_empty() else ": " + "; ".join(audit))) and ok
+	var before := GameState.START_MARKETS
+	var waited := 0.0
+	while waited < seconds:
+		await get_tree().physics_frame
+		waited += get_physics_process_delta_time()
+	var sold := traffic.total_sales()
+	var departed := 0
+	var closest := INF
+	var states_seen := {}
+	for n in traffic.npcs:
+		departed += n.departures
+		closest = minf(closest, n.closest_fast)
+		states_seen.merge(n.states_seen)
+	ok = _check(departed >= traffic.npcs.size() and states_seen.size() >= 4, "all %d haulers left their berths and went through %d flight phases (%d departures)" % [traffic.npcs.size(), states_seen.size(), departed]) and ok
+	ok = _check(sold >= 4, "NPC haulers sold %d loads in %.0f s" % [sold, Time.get_ticks_msec() / 1000.0]) and ok
+	ok = _check(closest > 250.0, "at speed they keep to the lane, never nearer than %.0f m to a station" % closest) and ok
+	var moved := 0
+	for id in before:
+		for c in before[id]:
+			if before[id][c]["stock"] != GameState.markets[id][c]["stock"]:
+				moved += 1
+	ok = _check(moved > 0, "their trades and the markets' restocking moved %d stock levels" % moved) and ok
+	var logged := 0
+	for id in GameState.traffic:
+		logged += GameState.traffic[id].size()
+	ok = _check(logged > 0, "stations log the traffic (%d lines)" % logged) and ok
+	return ok
 
 
 ## Runs only the departure check, for quick iteration on flight code.
@@ -919,4 +973,10 @@ func _capture() -> void:
 	player.set_physics_process(false)
 	_on_terminal(tharsis, "trade")
 	await _shot("12_exchange_sell")
+	hud.terminal.close()
+	# Check-only: the haulers' TRAFFIC lines on an exchange where they have traded.
+	var busy: String = GameState.traffic.keys()[0] if not GameState.traffic.is_empty() else "ceres_yard"
+	ship.place_landed(stations[busy])
+	_on_terminal(stations[busy], "trade")
+	await _shot("exchange_traffic")
 	get_tree().quit()
