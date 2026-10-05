@@ -66,6 +66,8 @@ func _ready() -> void:
 		_selftest.call_deferred()
 	elif "--capture" in args:
 		_capture.call_deferred()
+	elif "--audit" in args:
+		_audit_only.call_deferred()
 
 
 func _build_environment() -> void:
@@ -227,6 +229,22 @@ func objective() -> String:
 
 # ---------------------------------------------------------------- self test
 
+func _audit_ship() -> bool:
+	var problems := ColliderAudit.run(ship)
+	for p in problems.slice(0, 25):
+		print("      ", p)
+	if problems.size() > 25:
+		print("      ... and %d more" % (problems.size() - 25))
+	return problems.is_empty()
+
+
+## `-- --audit`: only the collider audit, for quick checks while building art.
+func _audit_only() -> void:
+	await _frames(5)
+	_check(_audit_ship(), "ship collider audit")
+	get_tree().quit()
+
+
 func _check(ok: bool, what: String) -> bool:
 	print(("PASS  " if ok else "FAIL  ") + what)
 	return ok
@@ -290,6 +308,7 @@ func _selftest() -> void:
 	await _frames(30)
 	ok = _check(ship.state == Ship.State.LANDED and ship.landed_at == ceres, "ship starts landed at Ceres Yard") and ok
 	ok = _check(mode == "foot" and player.is_on_floor(), "player starts on foot, standing on the hangar floor") and ok
+	ok = _check(_audit_ship(), "every visible part of the ship has a matching collider, and every collider is visible") and ok
 
 	# Walk test: player moves under gravity without falling through.
 	var y0 := player.global_position.y
@@ -554,6 +573,10 @@ func _capture() -> void:
 	player._update_aim()
 	await _shot("04_loading")
 	player.place(Player.stack_target(ship.hold_slots[0].occupant))
+	_look_from(ship.to_global(Vector3(-1.6, 0.3, -4.6)), ship.to_global(Vector3(0.4, 1.4, -12.0)))
+	await _shot("13_cockpit_walkin")
+	_look_from(ship.to_global(Vector3(3.6, 0.3, -9.6)), ship.to_global(Vector3(-1.0, 1.6, -12.4)))
+	await _shot("14_cockpit_dash")
 	_on_seat()
 	await _shot("05_cockpit")
 	ship.enter_directory()

@@ -33,8 +33,9 @@ class FlightOverlay extends Control:
 		draw_arc(c, 12, 0, TAU, 24, g, 2)
 		draw_line(c + Vector2(-34, 0), c + Vector2(-18, 0), g, 2)
 		draw_line(c + Vector2(18, 0), c + Vector2(34, 0), g, 2)
-		draw_string(f, Vector2(size.x / 2 - 330, size.y / 2 + 50), "%03d M/S" % int(ship.velocity.length()), HORIZONTAL_ALIGNMENT_LEFT, 200, 34, g)
-		draw_string(f, Vector2(size.x / 2 + 130, size.y / 2 + 50), ship.mode_text(), HORIZONTAL_ALIGNMENT_RIGHT, 200, 34, g)
+		# Speed and mode sit left of the crosshair, above the gauge hood and clear of the pad label.
+		draw_string(f, c + Vector2(-430, 11), "%03d M/S" % int(ship.velocity.length()), HORIZONTAL_ALIGNMENT_RIGHT, 200, 34, g)
+		draw_string(f, c + Vector2(-430, 41), ship.mode_text(), HORIZONTAL_ALIGNMENT_RIGHT, 200, 26, g)
 		# Stations
 		for st in ship.stations:
 			if st == ship.landed_at:

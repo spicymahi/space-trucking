@@ -12,12 +12,29 @@ void fragment() {
 }
 """
 
+## Curved glass: barrel-warps the text texture, rounds the corners and adds a faint reflection.
+const GLASS := """
+shader_type spatial;
+render_mode unshaded, cull_back;
+uniform sampler2D screen_tex : source_color, filter_linear;
+uniform float curve = 0.07;
+void fragment() {
+	vec2 p = UV * 2.0 - 1.0;
+	p *= 1.0 + curve * dot(p.yx, p.yx);
+	vec2 q = max(abs(p) - vec2(0.86), vec2(0.0));
+	float edge = 1.0 - smoothstep(0.12, 0.15, length(q));
+	vec3 c = texture(screen_tex, p * 0.5 + 0.5).rgb * edge;
+	float sheen = smoothstep(0.9, 0.0, length(p - vec2(-0.45, -0.55))) * 0.06;
+	ALBEDO = c * 1.12 + vec3(sheen);
+}
+"""
+
 var label: Label
 var viewport: SubViewport
 var phosphor: Color
 
 
-func _init(size_m := Vector2(2.0, 1.5), px := Vector2i(512, 384), p_phosphor := Vox.PHOS_GREEN, font_size := 30) -> void:
+func _init(size_m := Vector2(2.0, 1.5), px := Vector2i(512, 384), p_phosphor := Vox.PHOS_GREEN, font_size := 30, bezel := true) -> void:
 	phosphor = p_phosphor
 	viewport = SubViewport.new()
 	viewport.size = px
@@ -49,17 +66,17 @@ func _init(size_m := Vector2(2.0, 1.5), px := Vector2i(512, 384), p_phosphor := 
 	var qm := QuadMesh.new()
 	qm.size = size_m
 	quad.mesh = qm
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_texture = viewport.get_texture()
-	m.emission_enabled = true
-	m.emission_texture = viewport.get_texture()
-	m.emission_energy_multiplier = 0.6
+	var m := ShaderMaterial.new()
+	var gs := Shader.new()
+	gs.code = GLASS
+	m.shader = gs
+	m.set_shader_parameter("screen_tex", viewport.get_texture())
 	quad.material_override = m
 	quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(quad)
-	# Bezel
-	Vox.box(self, Vector3(0, 0, -0.06), Vector3(size_m.x + 0.24, size_m.y + 0.24, 0.1), Color("3a3029"))
+	# Bezel (the cockpit builds its own chunkier monitor housings)
+	if bezel:
+		Vox.box(self, Vector3(0, 0, -0.06), Vector3(size_m.x + 0.24, size_m.y + 0.24, 0.1), Color("3a3029"))
 
 
 func set_text(t: String) -> void:
