@@ -66,6 +66,8 @@ func _ready() -> void:
 		_selftest.call_deferred()
 	elif "--capture" in args:
 		_capture.call_deferred()
+	elif "--audit" in args:
+		_audit_only.call_deferred()
 
 
 func _build_environment() -> void:
@@ -227,6 +229,22 @@ func objective() -> String:
 
 # ---------------------------------------------------------------- self test
 
+func _audit_ship() -> bool:
+	var problems := ColliderAudit.run(ship)
+	for p in problems.slice(0, 25):
+		print("      ", p)
+	if problems.size() > 25:
+		print("      ... and %d more" % (problems.size() - 25))
+	return problems.is_empty()
+
+
+## `-- --audit`: only the collider audit, for quick checks while building art.
+func _audit_only() -> void:
+	await _frames(5)
+	var ok := _check(_audit_ship(), "ship collider audit")
+	get_tree().quit(0 if ok else 1)
+
+
 func _check(ok: bool, what: String) -> bool:
 	print(("PASS  " if ok else "FAIL  ") + what)
 	return ok
@@ -290,6 +308,7 @@ func _selftest() -> void:
 	await _frames(30)
 	ok = _check(ship.state == Ship.State.LANDED and ship.landed_at == ceres, "ship starts landed at Ceres Yard") and ok
 	ok = _check(mode == "foot" and player.is_on_floor(), "player starts on foot, standing on the hangar floor") and ok
+	ok = _check(_audit_ship(), "every visible part of the ship has a matching collider, and every collider is visible") and ok
 
 	# Walk test: player moves under gravity without falling through.
 	var y0 := player.global_position.y
@@ -356,6 +375,30 @@ func _selftest() -> void:
 	await _aim_use(ship.to_global(hs[0].position))
 	ok = _check(hs[8].occupant == top, "and it stacks back on by aiming at the bottom crate") and ok
 	ok = _check(ship.hold_count() == 4 and ceres.pallet_count("water_ice") == 0, "4 crates in the hold, 2 stacks of 2") and ok
+
+	# Walk up beside the chair until blocked (each armrest, the throttle side, the seat back),
+	# then board from there by aiming at the seat and pressing F.
+	# [start, walk toward, aim at]
+	var seat_aim := Vector3(0, 1.3, -7.9)
+	var sides := {
+		"left armrest": [Vector3(-2.2, 0.3, -7.9), Vector3(0, 0.3, -7.9), seat_aim],
+		"right armrest": [Vector3(2.2, 0.3, -7.55), Vector3(0, 0.3, -7.55), seat_aim],
+		"throttle quadrant": [Vector3(2.2, 0.3, -8.3), Vector3(0.98, 0.3, -8.3), Vector3(0.98, 0.7, -8.3)],
+		"seat back": [Vector3(0, 0.3, -5.6), Vector3(0, 0.3, -7.9), seat_aim],
+		"seat back, left corner": [Vector3(-0.55, 0.3, -5.6), Vector3(-0.55, 0.3, -7.9), seat_aim],
+	}
+	for side in sides:
+		var spec: Array = sides[side]
+		player.global_position = ship.to_global(spec[0])
+		player.velocity = Vector3.ZERO
+		await _frames(3)
+		await _walk_to(ship.to_global(spec[1]), 150)
+		await _aim_use(ship.to_global(spec[2]))
+		var stood := ship.to_local(player.global_position)
+		ok = _check(mode == "pilot", "walked up to the %s (stopped at x %.2f z %.2f) and boarded with F" % [side, stood.x, stood.z]) and ok
+		if mode == "pilot":
+			await _press_key(KEY_F)
+			await _frames(5)
 
 	# Board by aiming at the seat and pressing F.
 	player.global_position = ship.to_global(Vector3(0, 0.3, -5.2))
@@ -554,6 +597,12 @@ func _capture() -> void:
 	player._update_aim()
 	await _shot("04_loading")
 	player.place(Player.stack_target(ship.hold_slots[0].occupant))
+	_look_from(ship.to_global(Vector3(-1.6, 0.3, -4.6)), ship.to_global(Vector3(0.4, 1.4, -12.0)))
+	await _shot("13_cockpit_walkin")
+	_look_from(ship.to_global(Vector3(3.6, 0.3, -9.6)), ship.to_global(Vector3(-1.0, 1.6, -12.4)))
+	await _shot("14_cockpit_dash")
+	_look_from(ship.to_global(Vector3(1.8, 0.3, -9.4)), ship.to_global(Vector3(0, 2.4, -4.2)))
+	await _shot("15_cockpit_door")
 	_on_seat()
 	await _shot("05_cockpit")
 	ship.enter_directory()
