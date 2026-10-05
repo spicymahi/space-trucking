@@ -631,6 +631,7 @@ func _selftest() -> void:
 	ok = _check(GameState.credits > start, "profit on the run: %d -> %d cr" % [start, GameState.credits]) and ok
 
 	ok = await _departure_test() and ok
+	ok = await _turn_back_test() and ok
 
 	print("SELFTEST " + ("OK" if ok else "FAILED"))
 	get_tree().quit(0 if ok else 1)
@@ -640,6 +641,7 @@ func _selftest() -> void:
 func _selftest_depart() -> void:
 	await _frames(30)
 	var ok := await _departure_test()
+	ok = await _turn_back_test() and ok
 	print("SELFTEST " + ("OK" if ok else "FAILED"))
 	get_tree().quit(0 if ok else 1)
 
@@ -693,6 +695,41 @@ func _departure_test() -> bool:
 	ok = _check(on_frames > 180 and min_vesta < 1500.0, "cruise stays on as the course passes back by Vesta Forge (closest %.0f m, on for %.1f s)" % [min_vesta, on_frames / 60.0]) and ok
 	ok = _check(not ship.cruise and e_d < 1500.0 and e_d > 300.0, "and drops out near Europa Deep, stopping %.0f m out" % e_d) and ok
 
+	return ok
+
+
+## Leaving Vesta Forge, turning straight back at it and pressing C: cruise
+## must still drop out short of the station you just left.
+func _turn_back_test() -> bool:
+	var ok := true
+	var vesta: Station = stations["vesta_forge"]
+	ship.place_landed(vesta)
+	await _frames(3)
+	Input.action_press("thrust_up")
+	await _frames(24)
+	Input.action_release("thrust_up")
+	await _frames(30)
+	Input.action_press("throttle_up")
+	var t := 0
+	while ship.global_position.distance_to(vesta.global_position) < 2200.0 and t < 60 * 60:
+		await get_tree().physics_frame
+		t += 1
+	Input.action_release("throttle_up")
+	var aimed := await _steer_to(vesta.global_position)
+	var out := ship.global_position.distance_to(vesta.global_position)
+	await _press_key(KEY_C)
+	var engaged := ship.cruise
+	var closest := INF
+	var hit := false
+	for f in 60 * 20:
+		await get_tree().physics_frame
+		closest = minf(closest, ship.global_position.distance_to(vesta.global_position))
+		if ship.get_slide_collision_count() > 0:
+			hit = true
+		if not ship.cruise and ship.velocity.length() < 5.0:
+			break
+	ok = _check(aimed and engaged and out > 1500.0 and out < 3000.0, "flew 2 km out of Vesta Forge, turned back at it with the arrows and pressed C (%.0f m out)" % out) and ok
+	ok = _check(not ship.cruise and not hit and closest > 500.0, "cruise drops out short of the station you just left (closest %.0f m, no impact)" % closest) and ok
 	return ok
 
 
@@ -773,11 +810,11 @@ func _capture() -> void:
 	_on_terminal(ceres, "contracts")
 	hud.contracts.sign_job(GameState.offers["ceres_yard"][1]["id"])
 	hud.contracts._refresh()
-	await _shot("15_contract_board")
+	await _shot("16_contract_board")
 	hud.contracts.close()
 	player.set_physics_process(false)
-	_look_from(ceres.to_global(Vector3(31, 0, 9)), ceres.to_global(Vector3(24, 1.0, 2.6)))
-	await _shot("16_job_crates")
+	_look_from(ceres.to_global(Vector3(31, 0, 7)), ceres.to_global(Vector3(25, 1.0, 2.6)))
+	await _shot("17_job_crates")
 	# Hand the job back so the loading shots show your own ice.
 	_on_terminal(ceres, "contracts")
 	hud.contracts.select_job(GameState.jobs[0]["id"])

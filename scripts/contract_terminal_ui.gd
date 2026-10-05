@@ -95,6 +95,7 @@ func _on_board_changed(station_id: String) -> void:
 		return
 	if not select_job(_sel_id):
 		_confirm_abandon = 0
+		_use_lock = 0.5
 		message = "OFFER #%d WAS TAKEN DOWN. NEW JOBS POSTED." % _sel_id
 	_refresh()
 
@@ -294,7 +295,7 @@ func abandon_selected() -> int:
 	var j: Dictionary = row["job"]
 	if _confirm_abandon != j["id"]:
 		_confirm_abandon = j["id"]
-		message = "PRESS %s AGAIN TO ABANDON JOB %d. PENALTY %s CR, AND THE CLIENT RECLAIMS ITS CRATES." % [_key_alt(), j["id"], GameState.money(roundi(j["reward"] * GameState.ABANDON_PENALTY))]
+		message = "PRESS %s AGAIN TO ABANDON JOB %d. PENALTY %s CR, AND THE CLIENT RECLAIMS ITS CRATES." % [_key_alt(), j["id"], GameState.money(mini(roundi(j["reward"] * GameState.ABANDON_PENALTY), maxi(0, GameState.credits)))]
 		return 0
 	_confirm_abandon = 0
 	if player and player.carried and player.carried.job_id == j["id"]:

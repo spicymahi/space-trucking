@@ -25,6 +25,8 @@ const CRUISE_MIN_DIST := 1500.0
 ## Cruise ignores the station you just left until you're this far out, since
 ## a course behind it leads back past it.
 const DEPART_CLEAR := 3000.0
+## ...but only while your line of flight misses it by more than this.
+const DEPART_MISS := 200.0
 const RAMP_LEN := 8.0
 const RAMP_HINGE := Vector3(0, 0.3, 16)
 const CAM_POS := Vector3(0, 2.55, -9.0)
@@ -496,7 +498,13 @@ func _fly(delta: float) -> void:
 			# Drop out near the course target, or near a station we are closing on,
 			# never near the one we are leaving.
 			var st := nearest_station()
-			var near_st := st != null and st != departed_from \
+			# The station you left only counts while your line of flight runs
+			# into it, so turning back on it still drops you out before impact.
+			var ignore_dep := false
+			if departed_from and velocity.length() > 1.0:
+				var to_dep := departed_from.global_position - global_position
+				ignore_dep = to_dep.cross(velocity.normalized()).length() > DEPART_MISS
+			var near_st := st != null and not (st == departed_from and ignore_dep) \
 				and global_position.distance_to(st.global_position) < CRUISE_DROP_DIST \
 				and velocity.dot(st.global_position - global_position) > 0.0
 			var near_target: bool = course_target != null and global_position.distance_to(course_target) < CRUISE_DROP_DIST
