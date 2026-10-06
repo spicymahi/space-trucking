@@ -278,8 +278,9 @@ func _overhead() -> void:
 			block(Vector3(x,2.21,z),Vector3(0.105,0.05,0.07),EDGE)
 
 func _overhead_wing(side: int, content: String) -> void:
-	var panel:=monitor(Vector3(side*0.64,2.035,-12.69),Vector2(0.49,0.27),content,Vector3(18,-side*29,0),IVORY)
-	var anchor:=Vector3(side*0.64,2.23,-12.99)
+	# Leave clearance for the full angled housing, not just the glass face.
+	var panel:=monitor(Vector3(side*0.75,2.035,-12.69),Vector2(0.49,0.27),content,Vector3(18,-side*29,0),IVORY)
+	var anchor:=Vector3(side*0.75,2.23,-12.99)
 	var hinge:=panel.position+panel.basis*Vector3(0,0,-0.17)
 	var arm:=block((anchor+hinge)*0.5,Vector3(0.10,0.10,anchor.distance_to(hinge)),EDGE)
 	arm.basis=Basis.looking_at(hinge-anchor)
