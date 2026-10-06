@@ -359,9 +359,10 @@ func command(terminal: String, line: String) -> String:
 	if op=="help": return help_text(terminal)
 	if op=="status": return status(terminal)
 	if op=="checklist": return checklist()
+	if terminal in ["chart","nav"] and op in ["stations","destinations"]:
+		return station_directory()
 	match terminal:
 		"chart":
-			if op=="destinations": return "CERES / Ceres Yard\nTHARSIS / Tharsis Ring (~9 min)\nKEPLER / Kepler Depot (~17 min)\nHELIOS / Helios Anchorage (~26 min)\nplot <id> direct|economy"
 			if op=="plot" and words.size() in [2,3]: return plan_route(words[1],words[2] if words.size()==3 else "direct")
 			if op=="route": return route_card()
 		"nav":
@@ -417,10 +418,20 @@ func command(terminal: String, line: String) -> String:
 func valid_number(value: String) -> bool:
 	return value.is_valid_float() and is_finite(float(value)) and absf(float(value))<10000000
 
+func station_directory() -> String:
+	var rows: Array[String] = ["STATION DIRECTORY / ROUTE IDs"]
+	for i in IDS.size():
+		var here := " [HERE]" if phase=="docked" and i==dock_id else ""
+		rows.append("%s / %s%s" % [IDS[i].to_upper(),NAMES[i],here])
+	rows.append("Plan at CHART: plot <id> direct|economy")
+	rows.append("Example: plot %s direct" % IDS[(dock_id+1)%IDS.size()])
+	rows.append("Then copy the route coordinates into NAV.")
+	return "\n".join(rows)
+
 func help_text(terminal: String) -> String:
 	match terminal:
-		"chart": return "map | destinations\nplot <station> direct|economy\nroute\nCalculate here; copy coordinates and fuel to NAV."
-		"nav": return "coords <x> <y> <z>  (km)\nburn <kg/s> | reserve <kg> | load\nrecalc | warp 1|5|20\nstatus | checklist\nSteer with arrows/Q/E. W thrust, S reverse.\nA/D lateral; R/V vertical. Shift fine. X stops spin."
+		"chart": return "stations | destinations  (list all stations)\nmap | plot <station> direct|economy\nroute\nCalculate here; copy coordinates and fuel to NAV."
+		"nav": return "stations | destinations  (list all stations)\ncoords <x> <y> <z>  (km)\nburn <kg/s> | reserve <kg> | load\nrecalc | warp 1|5|20\nstatus | checklist\nSteer with arrows/Q/E. W thrust, S reverse.\nA/D lateral; R/V vertical. Shift fine. X stops spin."
 		"fuel": return "mixture 2.5  (oxidizer : fuel)\nflow 6       (kg/s)\nstatus\nSet before plotting. Both affect fuel estimates."
 		"engine": return "power on|off\nhatch close|open\nramp raise|lower\nchecklist | status\nClose hatch and raise ramp before departure."
 		"comms": return "request | code <takeoff-code> | depart\napproach | dock\nrefuel | service | rescue\nsave | load\nATC never imposes a delivery deadline."

@@ -129,7 +129,7 @@ func refresh() -> void:
 		prompt.text="[F] "+kind.to_upper()+" TERMINAL"
 		if kind=="nav" and state.phase=="docked":
 			readout.add_theme_font_size_override("font_size",50)
-			readout.text="BERTH K-01 / DOCKED\nENGINE: CHECKLIST\nFUEL: MIXTURE 2.5\nCHART: PLOT ROUTE\nNAV: LOAD TRANSFER\nCOMMS: REQUEST"
+			readout.text="BERTH K-01 / DOCKED\nSTATIONS: LIST PORTS\nENGINE: CHECKLIST\nFUEL: MIXTURE 2.5\nCHART: PLOT ROUTE\nNAV: LOAD TRANSFER\nCOMMS: REQUEST"
 		if kind=="nav" and state.phase=="approach":
 			var g: Dictionary=state.guidance()
 			readout.text="YAW %+.1f° / UP %+.1f°\nDELTA-V %.1f m/s\nRANGE %.0f m\nREL SPEED %.1f m/s\nCAPTURE <20m / <2m/s\nCOMMS: APPROACH / DOCK" % [g.yaw,g.pitch,g.dv.length(),state.ship_position.distance_to(state.station_position(state.destination,state.elapsed)),(state.velocity-state.station_velocity(state.destination,state.elapsed)).length()]

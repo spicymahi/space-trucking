@@ -6,6 +6,8 @@ The default scene is `scenes/longhaul_flight.tscn`. The macOS launcher is `Fly L
 
 Press **F** near the pilot seat. Look at a CRT and press **F** to lean in and type. **Enter** runs a command, **Up/Down** recalls command history, and **Escape** returns to the seat view. Typing does not operate the flight controls. Each terminal supports `help`, `status`, `checklist`, and `clear`.
 
+Type `stations` (or `destinations`) at **NAV or CHART** to list every station and its route ID. Your current dock is marked `[HERE]`. The directory also shows how to plot a route at CHART, then transfer its coordinates to NAV.
+
 1. **ENGINE** — right console arm (or overhead center): `power on`.
 2. **FUEL** — forward right: `mixture 2.5`, then `flow 6`.
 3. **CHART** — forward left: `destinations`, then `plot tharsis direct`. `map` shows current station orbits and the calculated transfer; `route` shows the readback. `economy` chooses a slower transfer candidate.
