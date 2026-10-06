@@ -1,8 +1,8 @@
 ## Current playable build: Longhaul flight
 
-The default scene is now the detailed Longhaul with physical cockpit command-line terminals, manual Newtonian flight, calculated transfers, shipboard life, and manual arrival/docking. On macOS, double-click `Fly Longhaul.command` (Godot installed in Applications).
+The default scene is now the detailed Longhaul with physical cockpit command-line terminals, manual station flight, automatic interstation travel, printed checklists and route sheets, shipboard life, and optional docking assistance. On macOS, double-click `Fly Longhaul.command` (Godot installed in Applications).
 
-Start with **F** to sit, look at a screen, then **F** to type. Every terminal supports `help`. Read [the flight guide](docs/FLIGHT.md) for the departure sequence and controls. The ship automatically resumes its last saved flight.
+Start at the **CHECKLIST** computer and type `print` for the command sheet. Look at a screen and press **F** to type. `help` is a command reference. **P** reads/stows paper; **Tab** cycles sheets; **Delete** recycles them outside terminals. Read [the flight guide](docs/FLIGHT.md) for the departure sequence and controls. The ship automatically resumes its last saved flight.
 
 The original game remains available in `scenes/main.tscn`, the earlier economic prototype in `scenes/life_slice.tscn`, and the unchanged design study in `scenes/longhaul_preview.tscn`.
 

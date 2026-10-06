@@ -9,11 +9,11 @@ func check(value: bool, description: String) -> void:
 	print("FLIGHT ",description,": ",value)
 
 func prepare(s, id: String="tharsis", style: String="direct") -> void:
-	s.command("engine","power on")
-	s.command("fuel","mixture 2.5")
+	s.command("engine","port on")
+	s.command("engine","starboard on")
 	s.command("chart","plot "+id+" "+style)
 	s.command("nav","coords "+s.coords_text())
-	s.command("nav","burn %.2f" % s.plan.burn)
+	s.command("nav","burn 6")
 	s.command("nav","reserve 200")
 	s.command("nav","load")
 	s.command("comms","request")
@@ -21,160 +21,147 @@ func prepare(s, id: String="tharsis", style: String="direct") -> void:
 	s.hatch_closed=true
 	s.ramp_raised=true
 
-func fly_burn(s, max_seconds:=240.0) -> bool:
-	# Test pilot follows the same displayed vector, using finite-rate turning and thrust.
-	var start: float=s.elapsed
-	while s.elapsed-start<max_seconds and s.phase in ["departure","injection"]:
-		var g: Dictionary=s.guidance()
-		var dir: Vector3=g.direction
-		var desired:=Basis.looking_at(dir,Vector3.UP)
-		s.attitude=s.attitude.slerp(desired,minf(1,0.12))
-		s.angular_velocity=Vector3.ZERO
-		var aligned: bool=(-s.attitude.z).dot(dir)>0.998
-		var throttle: float=clampf(g.dv.length()/s.max_acceleration()/1.1,0,1) if aligned and g.dv.length()>1.3 else 0.0
-		if g.dv.length()<3: throttle=0
-		s.tick(0.1,Vector3(0,0,-throttle))
-	return s.phase=="coast"
+func fly_departure(s) -> bool:
+	s.depart()
+	for i in 160:
+		if s.safe_departure(): break
+		s.tick(0.5,Vector3.FORWARD*0.25)
+	s.engage_navigation()
+	return s.autopilot
 
-func fly_arrival(s) -> bool:
-	var start: float=s.elapsed
-	while s.elapsed-start<260 and s.phase=="brake":
-		var g: Dictionary=s.guidance()
-		var desired:=Basis.looking_at(g.direction,Vector3.UP)
-		s.attitude=s.attitude.slerp(desired,0.18)
-		var throttle: float=clampf(g.dv.length()/s.max_acceleration()/1.5,0,1) if (-s.attitude.z).dot(g.direction)>0.998 else 0
-		s.tick(0.1,Vector3(0,0,-throttle))
-	if s.phase!="approach": return false
+func arrive(s, fast:=false) -> bool:
+	if fast: s.sleep_until_warning()
+	for i in 1900:
+		if s.phase=="approach": return true
+		if s.fuel<=0: return false
+		s.tick(1)
+	return false
+
+func automatic_dock(s) -> bool:
 	s.command("comms","approach")
-	start=s.elapsed
-	while s.elapsed-start<450 and s.ship_position.distance_to(s.station_position(s.destination,s.elapsed))>12:
+	s.command("comms","autodock")
+	for i in 200:
+		if s.phase=="docked": return true
+		s.tick(0.5)
+	return false
+
+func manual_dock(s) -> bool:
+	s.command("comms","approach")
+	s.command("nav","manual")
+	s.attitude=Basis.IDENTITY
+	for i in 1500:
 		var g: Dictionary=s.guidance()
-		# RCS translation axes let the pilot keep the berth heading while closing.
-		s.attitude=Basis.IDENTITY
-		var thrust: Vector3=g.dv/s.max_acceleration()*0.9
-		s.tick(0.1,thrust.limit_length(1))
-	# Match station drift at the berth before capture.
-	for i in 60:
-		var dv: Vector3=s.station_velocity(s.destination,s.elapsed)-s.velocity
-		s.tick(0.1,dv/s.max_acceleration())
+		s.tick(0.1,(g.dv/s.max_acceleration()*0.9).limit_length(1))
+		if s.station_range()<12 and s.relative_speed()<1: break
 	s.command("comms","dock")
 	return s.phase=="docked"
 
 func run(host) -> bool:
 	var s=State.new()
 	check(s.command("comms","depart").contains("interlock"),"Incomplete startup blocked")
-	check(s.command("nav","load").contains("CHART"),"Navigation requires a plotted route")
-	check(s.command("fuel","flow nan").contains("Unknown"),"Nonfinite CLI input rejected")
-	check(s.command("nav","coords 1 wrong 3").contains("finite"),"Malformed coordinates rejected")
+	check(s.command("nav","load").contains("CHART"),"NAV requires plotted route")
+	check(s.command("nav","coords 1 nan 3").contains("finite"),"Nonfinite coordinate rejected")
+	s.command("engine","port on")
+	check(s.engines==[true,false] and s.engine_diagram().contains("STARBOARD: OFF"),"Engine switches and ASCII diagram are independent")
+	var one: float=s.max_acceleration()
+	s.command("engine","starboard on")
+	check(is_equal_approx(s.max_acceleration(),2*one),"Each engine contributes to actual thrust")
 	prepare(s)
-	check(s.loaded and s.can_depart(),"Route handoff, fuel and ATC readback complete")
+	check(s.can_depart(),"Departure needs no mixture setting")
+	s.command("engine","starboard off")
+	check(not s.can_depart(),"One engine off blocks takeoff")
+	s.command("engine","starboard on")
+	for field in ["hatch_closed","ramp_raised","cargo_secured","clearance_confirmed"]:
+		s.set(field,false)
+		check(not s.can_depart(),"Readiness gate: "+field)
+		s.set(field,true)
+	s.closures_busy=true
+	check(not s.can_depart(),"Moving hardware blocks takeoff")
+	s.closures_busy=false
 	s.command("comms","code WRONG")
-	check(not s.can_depart(),"Wrong ATC readback blocks departure")
+	check(not s.can_depart(),"Wrong takeoff code rejected")
 	s.command("comms","code "+s.clearance)
-	s.hatch_closed=false
-	check(not s.can_depart(),"Open hatch blocks departure")
-	s.hatch_closed=true
-	s.ramp_raised=false
-	check(not s.can_depart(),"Lowered ramp blocks departure")
-	s.ramp_raised=true
-	s.cargo_secured=false
-	check(not s.can_depart(),"Unrestrained cargo blocks departure")
-	s.cargo_secured=true
-	s.command("fuel","flow 7")
-	check(s.stale_plan() and not s.can_depart(),"Changed fuel setup requires a new calculation")
-	s=State.new()
-	prepare(s)
-	s.fuel=10
-	check(not s.can_depart(),"Arrival fuel and reserve are included")
-	s=State.new()
-	prepare(s)
-	s.command("comms","depart")
-	var p0: Vector3=s.ship_position
-	var v0: Vector3=s.velocity
-	var expected: Array=s.propagate(p0,v0,10)
+	var original_fuel: float=s.fuel
+	s.fuel=s.plan.fuel+199
+	check(not s.can_depart(),"Spare fuel included in departure validation")
+	s.fuel=original_fuel
+	var stamp: float=s.elapsed
+	s.tick(7200)
+	check(s.elapsed==stamp and s.can_depart(),"Reading paperwork has no ticking launch deadline")
+	s.depart()
+	check(not s.engage_navigation().contains("engaged"),"Autopilot cannot engage inside station corridor")
+	var predicted: Array=s.propagate(s.ship_position,s.velocity,10)
 	s.tick(10)
-	check(s.velocity.length()>v0.length()*0.95 and s.ship_position.distance_to(expected[0])<5,"No thrust preserves momentum; gravity integrates consistently")
-	var fuel_before: float=s.fuel
-	s.tick(1,Vector3.FORWARD)
-	check(s.fuel<fuel_before and s.last_thrust>0,"Manual thrust consumes fuel")
+	check(s.ship_position.distance_to(predicted[0])<5,"Momentum and gravity preserved without thrust")
 	s.angular_velocity=Vector3(0,0.2,0)
-	v0=s.velocity
-	var predicted: Array=s.propagate(s.ship_position,v0,1)
+	predicted=s.propagate(s.ship_position,s.velocity,1)
 	s.tick(1,Vector3.ZERO,Vector3.ZERO,true)
-	check(s.angular_velocity.length()<0.001 and s.velocity.distance_to(predicted[1])<0.2,"X cancels rotation without braking translation")
+	check(s.angular_velocity.length()<0.001 and s.velocity.distance_to(predicted[1])<0.2,"X stops spin without stopping translation")
 	s=State.new()
 	prepare(s)
-	s.command("comms","depart")
-	check(fly_burn(s),"Manual injection establishes a coast")
-	check(s.warning.contains("Safe to leave"),"Safe-to-leave confirmation follows a real trajectory match")
+	check(fly_departure(s),"Manual departure hands over to automatic transfer")
 	var coast_state: Dictionary=s.snapshot()
-	check(s.set_warp(20).contains("20x"),"Fast time available on established coast")
-	s.sleep_until_warning()
-	var before_rest: float=s.rest
-	for i in 1000:
-		if s.warp==1: break
-		s.tick(0.5)
-	check(s.warp==1 and not s.sleeping and absf(s.time_to_burn()-75)<0.1,"Sleep and time acceleration stop exactly before maneuver warning")
-	check(s.rest>before_rest,"Bunk sleep restores rest")
-	check(s.warning.contains("75 seconds"),"Advance maneuver warning delivered")
-	check(s.set_warp(20).contains("needs"),"Cannot skip required burn with fast time")
-	while s.phase=="coast": s.tick(0.5)
-	check(s.phase=="brake","Coast hands back manual arrival burn")
-	check(s.dock().contains("berth"),"Docking requires ATC approach clearance")
-	check(fly_arrival(s),"Manual braking, approach and docking complete a full trip")
-	check(s.dock_id==1 and s.completed_trips==1 and s.fuel>200,"Destination and fuel reserve preserved after arrival")
-	print("JOURNEY finished at ",s.elapsed,"s; fuel ",s.fuel,"; phase ",s.phase)
-	prepare(s,"ceres")
-	check(s.can_depart(),"A return trip can be prepared from the destination")
-	var recovery=State.new()
-	check(recovery.restore(coast_state),"Flight snapshot restores actual position and velocity")
-	check(recovery.warp==1 and not recovery.sleeping,"Loading always restores normal time")
+	var restored=State.new()
+	check(restored.restore(JSON.parse_string(JSON.stringify(coast_state))) and restored.autopilot,"Automatic journey survives JSON save/load")
 	var invalid:=coast_state.duplicate(true)
-	invalid.velocity=[0,"invalid",0]
-	var old: Vector3=recovery.velocity
-	check(not recovery.restore(invalid) and recovery.velocity==old,"Malformed save rejected without mutating flight")
-	while recovery.phase=="coast": recovery.tick(1)
-	for i in 245: recovery.tick(1)
-	check(recovery.misses>0 and recovery.warning.contains("recalc"),"Missed burn warns and offers recovery")
-	var previous_position: Vector3=recovery.ship_position
-	recovery.recalculate()
-	check(recovery.phase=="injection" and not recovery.loaded and recovery.ship_position==previous_position,"Recalculation preserves physical state and requires new NAV handoff")
-	recovery.command("nav","coords "+recovery.coords_text())
-	recovery.command("nav","burn %.2f" % recovery.plan.burn)
-	recovery.command("nav","reserve 200")
-	recovery.command("nav","load")
-	check(recovery.loaded,"Recovery route can be entered")
-	check(fly_burn(recovery,300),"A missed burn can be recovered with manual thrust")
-	var tug=State.new()
-	prepare(tug)
-	tug.depart()
-	tug.fuel=0
-	tug.rescue()
-	check(tug.phase=="docked" and tug.fuel>=600,"Fuel exhaustion has a nonpunitive tug recovery")
+	invalid.velocity=[0,"bad",0]
+	check(not restored.restore(invalid),"Invalid save rejected before mutation")
+	restored.tick(0.2,Vector3.RIGHT*0.1)
+	check(not restored.autopilot and restored.warp==1,"Manual thrust takes control without teleporting")
+	var before: Vector3=restored.ship_position
+	restored.recalculate()
+	check(restored.autopilot and restored.ship_position==before,"Recalculation resumes from real position")
+	restored.command("engine","port off")
+	restored.tick(0.1)
+	check(not restored.autopilot and not restored.sleeping and restored.warning.contains("unavailable"),"Engine loss interrupts NAV and wakes sleeper")
+	var start_rest: float=s.rest
+	s.sleep_until_warning()
+	var slept_through_burn:=false
+	for i in 1900:
+		if s.phase=="approach": break
+		s.tick(0.5)
+		if s.phase=="brake" and s.sleeping: slept_through_burn=true
+	check(slept_through_burn,"Sleep continues through automatic arrival burn")
+	check(s.phase=="approach" and s.arrival_hold and not s.sleeping and s.warp==1,"Sleep wakes at safe station arrival")
+	check(s.rest>start_rest,"Sleep restores rest")
+	check(s.station_range()>580 and s.station_range()<620 and s.relative_speed()<1,"Arrival holds outside the station with matched velocity")
+	for i in 120: s.tick(1)
+	check(absf(s.station_range()-600)<8 and s.relative_speed()<0.6,"Arrival hold follows a moving station while player is away")
+	check(s.engage_docking().contains("clearance"),"Auto docking requires arrival clearance")
+	s.command("comms","approach")
+	var place: Vector3=s.ship_position
+	s.ship_position+=Vector3(2000,0,0)
+	check(s.engage_docking().contains("1000"),"Distant auto docking rejected")
+	s.ship_position=place
+	var speed: Vector3=s.velocity
+	s.velocity+=Vector3(40,0,0)
+	check(s.engage_docking().contains("15"),"Fast auto docking rejected")
+	s.velocity=speed
+	check(manual_dock(s),"Manual station approach and capture remain available")
 	for id in ["tharsis","kepler","helios"]:
 		for style in ["direct","economy"]:
 			var route=State.new()
+			route.coolant=0.70
 			prepare(route,id,style)
-			check(route.can_depart(),"%s %s route is fuel-feasible" % [id,style])
-			check(route.plan.eta<1800,"%s %s nominal travel budget below 30 real minutes" % [id,style])
-			var result: Array=route.propagate(route.ship_position,route.plan.velocity,route.plan.eta)
-			check(result[0].distance_to(route.plan.target)<20,"%s %s numerical intercept solves to <20m" % [id,style])
-			route.depart()
-			check(fly_burn(route,300),"%s %s injection achievable" % [id,style])
-			while route.phase=="coast": route.tick(1)
-			check(fly_arrival(route),"%s %s full journey docks" % [id,style])
-			print("ROUTE TIME ",id," ",style,": ",route.elapsed,"s / ",route.phase)
-			check(route.elapsed<1800,"%s %s full journey under 30 real minutes" % [id,style])
+			check(route.can_depart(),"%s %s fuel feasible" % [id,style])
+			check(fly_departure(route),"%s %s manual corridor" % [id,style])
+			check(arrive(route),"%s %s automatic transfer and braking" % [id,style])
+			check(automatic_dock(route),"%s %s docking assistance completes capture" % [id,style])
+			check(route.elapsed<1800 and route.fuel>200,"%s %s under 30 minutes with spare fuel" % [id,style])
+			print("ROUTE TIME ",id," ",style,": ",route.elapsed,"s / fuel ",route.fuel)
 			if style=="direct":
 				route.command("comms","refuel")
+				var start: float=route.elapsed
 				prepare(route,"ceres")
-				check(route.can_depart(),"%s return leg is fuel-feasible" % id)
-				var return_start: float=route.elapsed
-				route.depart()
-				check(fly_burn(route,300),"%s return injection achievable" % id)
-				while route.phase=="coast": route.tick(1)
-				check(fly_arrival(route),"%s round trip docks at Ceres" % id)
-				check(route.elapsed-return_start<1800,"%s return under 30 real minutes" % id)
+				check(fly_departure(route) and arrive(route) and automatic_dock(route),id+" return journey")
+				check(route.elapsed-start<1800 and route.dock_id==0,id+" return budget")
+	var tug=State.new()
+	prepare(tug)
+	fly_departure(tug)
+	tug.fuel=0
+	tug.tick(1)
+	tug.rescue()
+	check(tug.phase=="docked" and tug.fuel>=600 and not tug.autopilot,"Fuel exhaustion has tug recovery")
 	# Exercise live terminals, hardware animations, save/restore and focus isolation.
 	host._take_seat()
 	var chart=host.terminals[0]
@@ -194,16 +181,16 @@ func run(host) -> bool:
 	check(chart.lines.any(func(line): return line.contains("THARSIS")),"Typed CLI command executes on the physical display")
 	host.close_terminal()
 	check(host.active_terminal==null and is_equal_approx(host.camera.fov,76),"Escape restores the pilot view")
-	host.terminal_command("engine","power on")
-	host.terminal_command("fuel","mixture 2.5")
+	host.terminal_command("engine","port on")
+	host.terminal_command("engine","starboard on")
 	check(host.set_ramp(true).contains("hatch"),"Physical ramp refuses to raise with an open hatch")
-	host.terminal_command("engine","hatch close")
+	host.terminal_command("checklist","hatch close")
 	await host.get_tree().create_timer(0.8).timeout
-	check(not host.loading_module.hatch_open and not host.loading_module.hatch_moving,"ENGINE terminal closes real loading hatch")
+	check(not host.loading_module.hatch_open and not host.loading_module.hatch_moving,"CHECKLIST terminal closes real loading hatch")
 	host.set_ramp(true)
 	await host.get_tree().create_timer(1.9).timeout
 	host.sync_hardware()
-	check(host.flight.ramp_raised and not host.ramp_moving,"ENGINE terminal raises real ramp and waits for completion")
+	check(host.flight.ramp_raised and not host.ramp_moving,"CHECKLIST terminal raises real ramp and waits for completion")
 	host.terminal_command("chart","plot tharsis direct")
 	host.terminal_command("nav","coords "+host.flight.coords_text())
 	host.terminal_command("nav","burn 6")
@@ -248,7 +235,7 @@ func run(host) -> bool:
 	host.sync_hardware()
 	host.set_ramp(false)
 	await host.get_tree().create_timer(1.9).timeout
-	host.terminal_command("engine","hatch open")
+	host.terminal_command("checklist","hatch open")
 	await host.get_tree().create_timer(0.8).timeout
 	check(await host._walk_to(Vector3(0,0,9)),"Walk through cargo into engineering with flight installed")
 	check(await host._walk_to(Vector3(0,0,17)),"Walk down the deployed folding ramp onto the station berth")

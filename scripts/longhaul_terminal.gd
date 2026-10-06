@@ -14,7 +14,7 @@ var history: Array[String] = []
 var history_index := 0
 var focused := false
 var show_map := false
-var show_help := true
+var show_help := false
 var chart_map: Control
 var refresh_timer := 0.0
 
@@ -28,10 +28,10 @@ func build(ship: Node3D, monitor: Node3D, role: String) -> void:
 	viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS
 	add_child(viewport)
 	var bg:=ColorRect.new()
-	bg.color=Color("071611") if kind in ["chart","nav","comms"] else Color("191609")
+	bg.color=Color("071611") if kind in ["chart","nav","comms","map"] else Color("191609")
 	bg.size=viewport.size
 	viewport.add_child(bg)
-	var tint:=Color("9fe7b1") if kind in ["chart","nav","comms"] else Color("edc876")
+	var tint:=Color("9fe7b1") if kind in ["chart","nav","comms","map"] else Color("edc876")
 	header=label(Vector2(24,14),29,tint)
 	header.size=Vector2(792,78)
 	readout=label(Vector2(24,103),26,tint)
@@ -48,7 +48,7 @@ func build(ship: Node3D, monitor: Node3D, role: String) -> void:
 	material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
 	panel.get_meta("screen_mesh").material_override=material
 	panel.set_meta("terminal",self)
-	if kind=="chart":
+	if kind in ["chart","map"]:
 		chart_map=preload("res://scripts/longhaul_route_map.gd").new()
 		chart_map.host=host
 		chart_map.map_font=host.font
@@ -69,8 +69,9 @@ func label(at: Vector2, size_px: int, tint: Color) -> Label:
 func focus() -> void:
 	focused=true
 	show_map=false
-	show_help=true
-	if lines.is_empty(): append(host.flight.help_text(kind))
+	show_help=false
+	lines.clear()
+	append(host.flight.status(kind))
 	refresh()
 
 func append(message: String) -> void:
@@ -81,16 +82,15 @@ func submit(value: String) -> void:
 	if value.strip_edges().is_empty(): return
 	history.append(value)
 	history_index=history.size()
-	show_help=value.strip_edges().to_lower() in ["help","next"]
+	show_help=false
 	show_map=kind=="chart" and value.strip_edges().to_lower()=="map"
 	if show_map:
 		entry=""
 		refresh()
 		return
-	if kind=="nav" and (host.flight.nav_stage>=0 or value.strip_edges().to_lower()=="plot"):
-		lines.clear()
 	if value.strip_edges().to_lower()=="clear": lines.clear()
 	else:
+		lines.clear()
 		append("> "+value)
 		append(host.terminal_command(kind,value))
 	entry=""
@@ -122,33 +122,39 @@ func refresh() -> void:
 	readout.add_theme_font_size_override("font_size",26)
 	if focused:
 		# Fixed visible history: long help/readback outputs remain scroll-free.
-		readout.text=state.help_text(kind) if show_help else "\n".join(lines.slice(maxi(0,lines.size()-11)))
+		readout.text="\n".join(lines.slice(maxi(0,lines.size()-13)))
 		prompt.text=kind.to_upper()+"> "+entry+"_"
-		footer.text="help: NEXT STEP | commands: LIST | go <terminal>"
+		footer.text="commands: LIST | papers: RACK | go <terminal>"
 	else:
 		readout.text=state.status(kind)
-		if kind=="nav":
-			readout.add_theme_font_size_override("font_size",60)
-			var g: Dictionary=state.guidance()
-			readout.text="YAW %s %.1f°\nPITCH %s %.1f°\nDELTA-V %.1f m/s\nRANGE %.0f m\nBURN IN %.0f s\n%s" % ["LEFT" if g.yaw>0 else "RIGHT",absf(g.yaw),"UP" if g.pitch>0 else "DOWN",absf(g.pitch),g.dv.length(),state.ship_position.distance_to(state.station_position(state.destination,state.elapsed)),state.time_to_burn(),"COAST / SAFE TO LEAVE" if state.phase=="coast" else ("CUT THRUST / ALIGN / X" if state.phase in ["departure","injection"] and g.dv.length()<3 else "W THRUST / SHIFT FINE")]
-		prompt.text="[F] "+kind.to_upper()+" TERMINAL"
-		if kind=="nav" and state.phase=="docked":
-			readout.add_theme_font_size_override("font_size",50)
-			readout.text="BERTH K-01 / DOCKED\nTYPE help TO BEGIN\n\n"+state.next_hint()
-		if kind=="nav" and state.phase=="approach":
-			var g: Dictionary=state.guidance()
-			readout.text="YAW %+.1f° / UP %+.1f°\nDELTA-V %.1f m/s\nRANGE %.0f m\nREL SPEED %.1f m/s\nCAPTURE <20m / <2m/s\nCOMMS: APPROACH / DOCK" % [g.yaw,g.pitch,g.dv.length(),state.ship_position.distance_to(state.station_position(state.destination,state.elapsed)),(state.velocity-state.station_velocity(state.destination,state.elapsed)).length()]
-		footer.text="INERTIAL FLIGHT / MANUAL THRUST" if kind=="nav" else "TYPE help FOR COMMANDS"
-	if chart_map and chart_map.visible:
+		prompt.text="[F] "+kind.to_upper()+" COMPUTER"
+		footer.text="P: READ PAPER / TAB: NEXT / DELETE: DISCARD"
+	if kind=="engine" and (not focused or lines.size()<=1 or (not history.is_empty() and (history.back().begins_with("port") or history.back().begins_with("starboard") or history.back()=="status"))):
+		readout.text=state.engine_diagram()
+		readout.add_theme_font_size_override("font_size",30)
+	if kind=="checklist" and (not focused or history.is_empty() or history.back() in ["status","checklist"]): readout.text=state.checklist()
+	if kind=="map":
+		chart_map.visible=true
+		chart_map.position=Vector2(24,100)
+		chart_map.size=Vector2(792,405)
+		readout.text=""
+		header.text="LONGHAUL / LIVE JOURNEY MAP\n"+state.phase.to_upper()
+		chart_map.queue_redraw()
+		footer.text="TEAL: FLOWN / AMBER: PLANNED / DIAMOND: ARRIVAL"
+	if kind=="distance":
+		header.text="STATION RANGE / NAV LINK"
+		readout.text=""
+		if state.nav_selected:
+			var distance: float=state.station_range()
+			readout.add_theme_font_size_override("font_size",85)
+			readout.text="%s\n%s" % [state.IDS[state.destination].to_upper(),"%.1f km" % (distance/1000) if distance>=1000 else "%.0f m" % distance]
+		footer.text=""
+		prompt.text=""
+	if kind=="chart" and chart_map and chart_map.visible:
 		chart_map.queue_redraw()
 		readout.position=Vector2(24,387)
 		readout.size=Vector2(792,126)
-		readout.text="plot <station> direct|economy\n"+("COORDS "+state.coords_text()+"\nBURN %.2f kg/s   RESERVE %.0f kg" % [state.plan.burn,state.plan.reserve] if not state.plan.is_empty() else "destinations: list stations\nhelp: command reference")
-
-	if state.phase=="coast" and state.time_to_burn()<=75:
-		footer.text="MANEUVER IN %.0fs / RETURN TO CONTROLS" % state.time_to_burn()
-	elif state.phase=="brake":
-		footer.text="ARRIVAL BURN DUE / MANUAL BRAKING REQUIRED"
+		readout.text="plot <station> direct|economy\n"+("COORDS "+state.coords_text()+"\nBURN %.2f kg/s   SPARE %.0f kg" % [state.plan.burn,state.plan.reserve] if not state.plan.is_empty() else "destinations: list stations\nhelp: command reference")
 
 func _process(delta: float) -> void:
 	refresh_timer-=delta

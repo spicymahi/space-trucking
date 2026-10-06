@@ -1,78 +1,91 @@
 # Longhaul — cockpit flight and ship life
 
-The default scene is `scenes/longhaul_flight.tscn`. The macOS launcher is `Fly Longhaul.command`. This is the approved detailed ship with live cockpit computers. The old economic life slice and the independent room study remain available through their own launchers.
+The default scene is `scenes/longhaul_flight.tscn`. On macOS, double-click `Fly Longhaul.command`. The detailed ship now has printed flight paperwork, manual station flying, and automatic transfers between stations. The earlier economy prototype and independent room study retain their own launchers.
 
-## Your first departure
+## Cockpit layout
 
-Docked launches open directly at the NAV guide. When walking, press **F** near the pilot seat; look at a CRT and press **F** to lean in and type. **Enter** runs a command, **Up/Down** recalls command history, and **Escape** returns to the seat view. Typing does not operate the flight controls. `help` (or `next`) shows the next unfinished step, the correct terminal, and the exact command. It updates as hardware finishes moving. `commands` (or `help all`) shows the command reference. `status`, `checklist`, and `clear` remain available.
+| Screen | Function |
+| --- | --- |
+| Forward left — CHART | Station directory, route calculation, route-sheet printer |
+| Forward middle — NAV | Manual coordinate/fuel entry, automatic transfer, manual takeover |
+| Forward right — CHECKLIST | Live departure requirements, printed command checklist, hatch/ramp controls |
+| Left console arm — COMMS | Takeoff and docking clearance, takeoff code, berth release/capture, station services |
+| Right console arm — ENGINE | Independent `port on/off` and `starboard on/off`, live ASCII engine diagram |
+| Upper left — FUEL | Fuel remaining, current burn, spare fuel and coolant status |
+| Upper middle — MAP | Live ship/station positions, flown trail, planned transfer, automatic approach zoom |
+| Upper right — DISTANCE | Only the selected station and its current distance; value stays blank until NAV loads a destination |
 
-You can type `go engine`, `go fuel`, `go chart`, `go nav`, or `go comms` to move your view to that physical terminal. Escape still returns to your original pilot view.
+Look at a screen and press **F** to lean in. **Enter** runs a command; **Up/Down** recalls commands; **Escape** returns to the pilot view. `go checklist`, `go chart`, `go nav`, `go engine`, `go comms`, `go fuel`, `go map`, and `go distance` move the view to the corresponding physical screen. `help` and `commands` show a static command reference. There is no next-step help tutorial.
 
-Type `stations` (or `destinations`) at **NAV or CHART** to list every station and its route ID. Your current dock is marked `[HERE]`. The directory also shows how to plot a route at CHART, then transfer its coordinates to NAV.
+## Printed departure checklist
 
-1. **ENGINE** — right console arm (or overhead center): `power on`.
-2. **FUEL** — forward right: `mixture 2.5`, then `flow 6`.
-3. **CHART** — forward left: `stations`, then `plot tharsis direct` (or your chosen station). Type `print` to feed a paper flight sheet from the chart printer. `map` shows the orbits/transfer; `economy` chooses a slower candidate.
-4. **NAV** — forward center: type `go nav`, then `plot`. The printed sheet automatically appears beside the screen. NAV asks for X Y Z on one line (kilometres, including minus signs), then burn rate, then reserve. Enter only the requested numbers at each step. Type `load` when NAV confirms all three values. The older `coords`, `burn`, and `reserve` commands remain available through `commands`.
-5. **COMMS** — left console arm (or overhead right): `request`. Read the returned takeoff code back using `code <code>`.
-6. **ENGINE**: `hatch close`, wait until sealed, then `ramp raise`. The ramp folds and raises physically; wait for completion. `checklist` identifies anything missing. Cargo clamps must also be secured.
-7. **COMMS**: `depart`. The berth releases; you now control the ship.
+Docked launches open the CHECKLIST computer. Type `print` for a retained paper checklist. The live screen shows every departure requirement and marks completed items. Printing is optional for the interlock; it gives the player a physical reference rather than advancing a tutorial.
 
-Docked preparation now holds the simulation clock: reading, printing, and typing cannot expire your route. Normal orbital simulation starts when the berth releases. There is no clearance expiry or delivery deadline. Changing fuel flow, mixture, cargo mass, or coolant condition still requires replotting and printing a fresh sheet. An older sheet is retained as paper but rejected for guided entry after a new route is plotted. The guide identifies the required update.
+1. **ENGINE:** `port on`, then `starboard on`. Both engines must be on. The ASCII diagram reflects each switch and each engine contributes to actual thrust. Fuel mixture is automatic and has no player command.
+2. **CHART:** `stations`, then `plot tharsis direct` (or another station ID, with `direct` or `economy`). Review fuel and travel estimate; `print` produces the route sheet.
+3. **NAV:** manually type the exact commands printed on that sheet: `coords <x> <y> <z>`, `burn <kg/s>`, `reserve <kg>`, then `load`. Coordinates are in kilometres, including minus signs. All values are validated. The destination meter becomes active when the route is loaded.
+4. **COMMS:** `request`, then `code <the code ATC returned>`. The code has no expiry.
+5. **CHECKLIST:** `hatch close`, wait for sealing, then `ramp raise` and wait for movement to finish. Secure cargo clamps in the hold. `status` shows live readiness, including machinery and sufficient fuel.
+6. **COMMS:** `depart`. Manually fly forward out of the berth, through the green departure markers. Beyond 300 metres in the corridor, NAV reports safe clearance. The outer 1 km station zone also allows engagement after a wider manual departure.
+7. **NAV:** `engage`. The ship aligns, accelerates, corrects the trajectory, and brakes automatically near the destination. It confirms that it is safe to leave the controls.
+8. At arrival, **COMMS:** `approach`. Fly the final approach manually or use `autodock` within 1 km and below 15 m/s relative speed.
 
-A blocked `depart` now names the missing step and gives directions, including the exact ATC readback code. You can type `help` at any point instead of memorizing the sequence.
+**Spare fuel** is the reserve: 200 kg kept aside for docking and unexpected corrections. The sheet distinguishes burn rate (kg per second), estimated trip consumption (kg), and spare fuel (kg). The command remains `reserve 200`, printed explicitly on the route sheet. Fuel estimates include departure/arrival burns and a handling allowance.
 
-## Manual flight
+Preparation holds the simulation clock while docked. There is no ticking launch window, delivery deadline, inspection, or punitive scheduling. Cargo mass or coolant changes require an updated route estimate; turning engines on and off does not change the planned fuel mixture.
+
+## Paper handling
+
+A rigid, full-size sheet advances through the printer slot in short motor steps, with printer sound and an output tray. Printing briefly gives a view of the machine. The printer finishes one sheet before accepting another job. Printed text is a snapshot: choosing another destination does not rewrite old paper.
+
+Up to 12 sheets stay in the cockpit paper rack, including both the checklist and route sheets. `papers` lists them, `paper <id>` selects a sheet, `paper hide` stows it, and `discard <id>` or `discard all` recycles unwanted sheets. Discarding paper does not erase a loaded route. A full rack asks you to discard sheets instead of silently removing old ones.
+
+At a terminal, the selected sheet appears beside the screen. Outside terminals, **P** opens/stows a larger readable copy, **Tab** selects the next sheet, and **Delete** discards it. Stow the full-page view before flying or walking. These keys are shown while reading; letters typed into a terminal stay CLI input.
+
+## Manual flight and automatic navigation
 
 | Control | Action |
 | --- | --- |
-| W / S | Main forward / reverse thrust |
+| W / S | Forward / reverse thrust |
 | A / D | Left / right translation |
 | R / V | Up / down translation |
 | Arrow keys | Pitch and yaw |
 | Q / E | Roll |
-| X (hold) | Stop rotation; translational velocity remains |
+| X (hold) | Stop rotation without stopping translation |
 | Shift (hold) | Fine thrust and finer turning |
 | Mouse | Look around the cockpit |
-| F | Use the screen under your gaze, or leave the seat on a stable coast |
-| Escape | Step back from a terminal; otherwise pause/resume |
+| F | Use a screen or leave the seat when docked, NAV is engaged, or arrival hold is active |
+| P | Read/stow paper |
+| Escape | Leave terminal view; otherwise pause/resume |
 
-The NAV screen shows yaw/pitch correction and remaining delta-V. Point in the indicated direction, apply thrust, and reduce thrust as the remaining velocity change approaches zero. Under 3 m/s, cut thrust, align to the coast heading, and stop rotation with X. Hold that state briefly for **Course established. Safe to leave controls.** The computer checks the actual velocity vector, attitude, absence of thrust, and angular stability. It never applies an autopilot burn.
+Manual flight preserves momentum and uses real fuel. NAV applies the same six-axis acceleration/fuel model; it does not teleport the ship between stations. The route solver tracks moving stations and accounts for gravity. Delayed departures are rebased when NAV engages, so slow preparation does not invalidate a trip.
 
-Releasing thrust does not brake. Gravity continues to curve the trajectory. Fuel flow and available coolant affect acceleration and fuel estimates. The model uses metres, flight seconds and kilograms in a compressed local system; the ship-life clock advances one fictional hour per normal real minute. Coordinates are displayed in kilometres.
+`manual` at NAV or manual thrust/steering input cancels automatic transfer, arrival hold, or docking assistance. Momentum is preserved. `recalc` computes a new transfer from the current physical state and re-engages NAV when fuel allows. Ordinary automatic corrections need no repeated coordinate typing. Initial destination selection still requires manual transcription.
 
-## Coast and life aboard
+## Life aboard and sleep
 
-Press F while looking away from a CRT to leave the seat. Walk, eat at the galley heating plate, drink at the sink, wash using the existing washroom controls, inspect/move cargo, or repair the coolant circuit using the existing isolation/cover/fuse puzzle. The repair now changes available engine performance. Food, water, hygiene and rest decline gently; meals and water consume provisions.
+Once NAV is engaged, stand, eat, drink, wash, inspect cargo, and perform the existing coolant repair puzzle. Food, water, hygiene and rest decline gently. Supplies are finite; station services restock them. Coolant condition affects propulsion.
 
-At NAV, `warp 5` or `warp 20` speeds up a stable coast; `warp 1` restores normal time. Use the bunk with F to rest at 20x. F wakes you early. Both sleep and accelerated time stop **75 flight seconds before the arrival burn**. A chime, announcement, physical corridor repeaters, and terminal warnings call you back to the cockpit. The ship continues coasting at normal speed, so warnings are not an invisible brake or hold.
+NAV `warp 5` or `warp 20` speeds up automatic travel; `warp 1` restores normal time. The bunk uses 20x time and restores rest. It continues through automatic burns. Advance maneuver announcements remain, but they do not require the player to wake or return to the controls. Sleep ends at station arrival. Propulsion loss interrupts navigation and wakes the sleeper; F can also wake them early.
 
-Under the automated test pilot, complete outbound trips take approximately 9–10 minutes to Tharsis, 16–18 minutes to Kepler, and 24–28 minutes to Helios, including departure, coast, braking, and berth capture. Deliberate delays or missed burns can extend a journey; there is no punitive clock. Sleeping and fast time shorten the real wait.
+At arrival NAV brakes to a holding point about 600 m outside the berth, matches the moving station, restores normal time, and wakes the player. The ship maintains that position until the player takes over or requests docking assistance. There is no arrival deadline.
 
-## Arrival and recovery
+Tested outbound trips, including assisted berth capture, take approximately 8–9 minutes to Tharsis, 14–17 to Kepler, and 22–26 to Helios at normal speed with degraded-but-operational coolant. Deliberate manual delays can extend a trip. Sleeping and accelerated time shorten the real wait.
 
-At the burn, NAV changes to arrival guidance. Point at the displayed braking vector and thrust until relative velocity is matched. It then gives approach guidance toward the berth. Request a berth with COMMS `approach`; the berth remains reserved without a deadline.
+## Approach, docking, recovery and saves
 
-Manually approach within **20 m** and below **2 m/s relative speed**. NAV then guides the ship toward the berth heading (000 / pitch 000). Stop rotation with X and use COMMS `dock`. Berth capture attaches the ship to the station. Lower the ramp, open the hatch, and walk onto the berth if desired. A return or onward trip uses the same checklist.
+COMMS `approach` reserves the berth. For manual capture, reach within 20 m, below 2 m/s relative speed, berth heading 000 / pitch 000, and stop rotation; then use `dock`. Optional `autodock` requires arrival clearance, range under 1 km, relative speed under 15 m/s, both engines, coolant, and maneuver fuel. It flies the remaining approach and captures the berth. Manual input cancels it immediately.
 
-If you miss a burn, NAV `recalc` calculates a recovery from your real position and velocity; it does not teleport or brake you. Read the new CHART route into NAV and perform the correction manually. COMMS `rescue` provides a nonpunitive tug recovery if fuel or approach becomes a problem. `refuel` and `service` work while docked; station supplies and servicing are free in this flight test.
+After docking, use CHECKLIST `ramp lower`, then `hatch open` to walk onto the berth. Both engines can be switched off independently at ENGINE. COMMS `refuel`, `service`, and `rescue` remain nonpunitive prototype services; the economy is still separate.
 
-## Save and resume
+The game autosaves once a minute when moving hardware and carried cargo permit it. COMMS `save` and `load` provide manual control. Saves include route, actual position/velocity, automatic navigation/hold state, engines, papers, trail, needs, fuel, cargo, and repairs. Loads resume at normal time and awake. Earlier flight saves migrate without resetting the journey; NAV can take over an existing manual transfer after station clearance.
 
-The game autosaves once a minute when movable hardware and carried cargo are safe to save. COMMS `save` and `load` provide manual control. Flight state, fuel, needs, route, printed sheet, partial NAV input, attitude/velocity, ramp/hatch, case berth/clamps, and the engineering repair state persist. Older saves migrate automatically; an expired docked route from the earlier build is recalculated once for unhurried preparation. Saves resume in the pilot seat at normal time; sleep/time acceleration never resume unattended. The next launch automatically loads `user://longhaul_flight_v1.json`. The earlier life slice uses a separate file.
+## Simulation boundaries and validation
 
-## Simulation boundaries
+The compressed system uses central gravity, moving Keplerian stations, numerical intercept solving, and six-axis thrust. Multiple moving gravitational bodies and gravity-assist flybys remain future work. The fictional ship clock advances one hour per normal real minute. Station exteriors remain functional prototypes. Contracts, payments, paid cargo handlers, and shops remain in the separate life slice.
 
-This build uses numerically integrated central gravity, Keplerian moving stations, numerical intercept solving, and manually applied six-axis thrust. Routes are calculated direct or slower economy transfers. It does not yet simulate multiple moving gravitational bodies or plan planetary gravity-assist flybys. The route calculator solves the current compact system, not a full-scale Solar System.
-
-Station exteriors and berths remain functional prototypes. Contracts, payments, paid cargo handlers, and station shops remain in the separate life slice. Cargo and repair interactions in the detailed ship now participate in flight readiness/performance, but the economy has not been migrated. There is no combat, inspection, destructive collision failure, or delivery timer.
-
-## Validation
-
-The flight suite passes 106 checks, with 32 additional guidance/paper checks. `--flight-test` covers command validation, departure interlocks, momentum/gravity, fuel use, rotational damping, all six outbound route choices through manual burns and docking, missed-burn recovery, warning/time-skip boundaries, survival interactions, physical terminal focus/input, working hatch/ramp, walking aboard and down the ramp, and save/load including malformed data rejection. The guidance checks follow the paper-assisted startup through the real cockpit terminals, verify long preparation delays, old-save migration and partial entry persistence, and check that NAV and the paper both fit without overlapping.
+The current flight suite passes 94 flight checks and 34 paper/interface checks. `--flight-test` covers full journeys to every station in both route modes, direct return trips, fuel/time budgets, manual momentum and docking, engine loss, clearance and hardware gates, automatic arrival hold, sleep, manual takeover/recalculation, JSON save migration, printed commands, paper disposal, physical terminal placement, page/viewport bounds, walking and life interactions. Forward+ captures verify the actual cockpit screens and printer.
 
 ```sh
 /Applications/Godot.app/Contents/MacOS/Godot --headless --fixed-fps 60 --path . --log-file /tmp/longhaul-flight-test.log res://scenes/longhaul_flight.tscn -- --flight-test
 ```
-
-The previous `--longhaul-test` on the design-study scene also passes: 48 hab, 73 service, and 100 aft checks, plus the walking and cockpit checks. Forward+ captures check the physical CRT and pilot views.

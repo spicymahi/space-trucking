@@ -60,23 +60,13 @@ Inspect the normal working view, both side views, the entry, the rear wall, and 
 
 The playable flight scene now connects the approved detailed Longhaul interior to flight. See `FLIGHT.md` for the implemented loop, controls, validation, and remaining simulation boundaries. The independent design study and earlier economic life slice remain available.
 
-All flight preparation and planning must happen on the physical cockpit computer terminals through command-line interfaces. Route planning, navigation entry, engine setup, and ATC each belong to the appropriate terminal. Guidance stays on cockpit displays. The flight scene implements CHART, NAV, FUEL, ENGINE, and COMMS command lines with a close physical view for typing.
+All preparation happens on physical CLI terminals. CHECKLIST prints the complete command sequence and shows live departure readiness. CHART calculates and prints routes; NAV requires manually typed coordinates, burn rate and spare fuel. ENGINE provides independent port/starboard switches and a live ASCII diagram. Fuel mixture is automatic. COMMS handles takeoff/docking clearance and the manually entered takeoff code. The upper-middle screen is a live journey map, and the upper-right screen displays only the distance to the station loaded into NAV.
 
-- Short departure checklist: power engines, set fuel mixture, plot course, obtain an ATC takeoff code, close cargo hatch, and raise the ramp. The design study keeps its fixed ramp; the flight scene has a folding, powered ramp.
-- Momentum-based flight: releasing thrust preserves motion, the pilot brakes manually, and a separate key stops rotation only.
-- Select a destination on the route computer, obtain calculated coordinates and burn information, then enter the required values into the navigation computer. Begin with calculated routes rather than freehand orbital planning.
-- Guidance tells the player where to point and what velocity to achieve. The player manually establishes the trajectory; the computer then confirms that it is safe to leave the controls. Matching orientation alone is insufficient: travel direction and speed must also agree with the route.
-- Fuel planning includes departure, corrections, arrival braking, and reserve. Distinguish burn rate from total fuel required. The user wants fuel information to be entered as part of the planning ritual.
-- Gravity-assisted routes are a desired fuel-saving option. Their orbital math belongs to the route calculator; detailed simulation scope remains to be decided.
-- The longest normal journey should take at most roughly 30 minutes of actual player time aboard the ship, not 30 in-game minutes. Sleep and time acceleration can shorten the wait. There are no delivery deadlines, inspections, or violence.
-- Coast time supports food, drink, hygiene, sleep, cargo checks, and temporary repairs. Arrival returns to manual flying and docking.
+The player manually leaves the station, then engages NAV outside the clearance zone. NAV performs alignment, burns, corrections and arrival braking, allowing shipboard life throughout the transfer. Sleep continues through automatic burns and ends at a safe arrival hold. The player manually approaches the destination or chooses nearby docking assistance. Manual thrust and steering always cancel automation. Momentum persists; X stops rotation only.
 
-- Provide advance maneuver warnings so the player has time to return to the cockpit.
-- Stop sleep and time acceleration before a required burn, leaving time to prepare and take the controls.
-- Allow route recalculation and recovery if the player misses a burn.
-- Keep the experience cozy, with no delivery deadlines or punitive scheduling.
+Printed sheets remain in a paper rack and can be read, selected or recycled. Route sheets contain the exact NAV commands. Help is a static reference, not a next-step tutorial. There is no wasted cockpit equipment: every assigned screen has a distinct purpose.
 
-These requirements are implemented in the flight scene. Gravity assists remain a later extension; current routes use a central gravity field and moving station intercepts.
+Normal journeys target at most 30 real minutes aboard, with no delivery deadlines, punitive scheduling, inspections or violence. Current tests cover automatic transfers and optional docking within that budget. Gravity-assisted routes remain a desired later extension; the current simulation uses central gravity and moving station intercepts. See `FLIGHT.md` for the playable procedure and current boundaries.
 
 ## Launch and validation snapshot
 
