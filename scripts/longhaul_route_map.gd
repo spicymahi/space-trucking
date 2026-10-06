@@ -323,7 +323,7 @@ func _draw_schematic(state, chosen: String) -> void:
 		if stations.is_empty():
 			draw_string(map_font, Vector2(x, 60), "NO ORBITAL FACILITIES", HORIZONTAL_ALIGNMENT_LEFT, text_width, 23, GREEN)
 			draw_string(map_font, Vector2(x, 90), "Moon survey only.", HORIZONTAL_ALIGNMENT_LEFT, text_width, 21, GREEN.darkened(0.2))
-		draw_string(map_font, Vector2(6, size.y - 24), "map system / RETURN TO OVERVIEW", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, AMBER)
+		draw_string(map_font, Vector2(6, size.y - 24), "return / PREVIOUS SCREEN", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, AMBER)
 		draw_string(map_font, Vector2(6, size.y - 3), "SCHEMATIC / station <number> / plot <number> direct" if not stations.is_empty() else "SCHEMATIC / show <name> / OPEN ANOTHER BODY", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, GREEN.darkened(0.15))
 
 func _draw_schematic_body(at: Vector2, rings: bool, radius: float, selected: bool) -> void:

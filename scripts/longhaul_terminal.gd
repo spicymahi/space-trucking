@@ -22,6 +22,8 @@ var show_help := false
 var show_live := true
 var chart_map: Control
 var refresh_timer := 0.0
+const VIEW_HISTORY_LIMIT := 32
+var view_history: Array[Dictionary] = []
 
 func build(ship: Node3D, monitor: Node3D, role: String) -> void:
 	host=ship
@@ -57,9 +59,10 @@ func build(ship: Node3D, monitor: Node3D, role: String) -> void:
 	panel.set_meta("terminal",self)
 	set_role(role)
 
-func set_role(role: String) -> bool:
+func set_role(role: String, reset_navigation := true) -> bool:
 	var wanted:=role.strip_edges().to_lower()
 	if wanted not in VALID_ROLES: return false
+	if reset_navigation: view_history.clear()
 	kind=wanted
 	entry=""
 	lines.clear()
@@ -116,9 +119,15 @@ func submit(value: String) -> void:
 	if value.strip_edges().is_empty(): return
 	history.append(value)
 	history_index=history.size()
+	var previous_view:=view_snapshot()
 	show_help=false
 	var command:=value.strip_edges().to_lower()
 	var words:=command.split(" ",false)
+	if command=="return":
+		return_to_previous_view()
+		entry=""
+		refresh()
+		return
 	var map_command: bool=kind in ["chart","map"] and words[0] in ["map","show"]
 	show_map=false
 	if map_command:
@@ -133,6 +142,7 @@ func submit(value: String) -> void:
 		if not accepted:
 			append("Unknown map view or body. View preserved.\nUse map system, map route, or map local.\nUse show aurel or show <moon name>.\nMoon names are listed on map system.")
 		entry=""
+		remember_view(previous_view)
 		refresh()
 		return
 	if command in ["clear","status"]:
@@ -142,6 +152,11 @@ func submit(value: String) -> void:
 		var old_kind:=kind
 		var command_role: String="chart" if kind=="map" and words[0] in ["stations","destinations","station","plot","route","print"] else kind
 		var result: String=host.terminal_command(command_role,value,self)
+		if words[0]=="go" and host.active_terminal!=null and host.active_terminal!=self:
+			host.active_terminal.remember_view(previous_view,self)
+			entry=""
+			refresh()
+			return
 		lines.clear()
 		show_live=old_kind!=kind
 		if kind=="engine" and result==host.flight.engine_diagram(): show_live=true
@@ -150,6 +165,50 @@ func submit(value: String) -> void:
 			append("> "+value)
 			append(result)
 	entry=""
+	if not (kind=="comms" and command=="load"): remember_view(previous_view)
+	refresh()
+
+func view_snapshot() -> Dictionary:
+	var live: bool=show_live or show_map
+	return {"role":kind,"live":live,"lines":[] if live else lines.duplicate(),"map":chart_map.snapshot() if kind in ["chart","map"] and chart_map else {}}
+
+func remember_view(view: Dictionary, terminal: Node=null) -> void:
+	var previous: Node=self if terminal==null else terminal
+	if previous==self and view==view_snapshot(): return
+	if not view_history.is_empty() and view_history.back().terminal==previous and view_history.back().view==view: return
+	view_history.append({"terminal":previous,"view":view.duplicate(true)})
+	if view_history.size()>VIEW_HISTORY_LIMIT: view_history.pop_front()
+
+func return_to_previous_view() -> void:
+	while not view_history.is_empty():
+		var previous: Dictionary=view_history.pop_back()
+		var terminal: Node=previous.terminal
+		if not is_instance_valid(terminal): continue
+		if terminal==self and previous.view==view_snapshot(): continue
+		if terminal!=self: host.open_terminal(terminal)
+		terminal.restore_view(previous.view)
+		return
+	# A restored save has no browsing history. RETURN still reaches the overview/home.
+	show_live=true
+	show_map=false
+	lines.clear()
+	entry=""
+	if kind in ["chart","map"] and chart_map: chart_map.set_mode("system")
+	refresh()
+
+func restore_view(view: Dictionary) -> void:
+	var last_body: int=chart_map.selected_body if chart_map else -1
+	if kind!=view.role: set_role(view.role,false)
+	show_live=view.live
+	show_map=false
+	lines.assign(view.lines)
+	entry=""
+	if not view.map.is_empty():
+		var map_view: Dictionary=view.map.duplicate()
+		# Returning to overview keeps the most recently inspected body highlighted.
+		if map_view.mode=="system": map_view.body=last_body
+		restore_map_view(map_view)
+	if host.active_terminal==self: host.frame_terminal(self)
 	refresh()
 
 func handle_key(event: InputEventKey) -> void:
@@ -187,7 +246,7 @@ func refresh() -> void:
 		# Responses remain visible until status, clear, or a new focus restores telemetry.
 		readout.text=state.status(kind) if live else "\n".join(lines.slice(maxi(0,lines.size()-13)))
 		prompt.text=kind.to_upper()+"> "+entry+"_"
-		footer.text="TAB paper / SHIFT+TAB next / display <role>"
+		footer.text="return back / TAB paper / SHIFT+TAB next"
 	else:
 		readout.text=state.status(kind)
 		prompt.text="[F] "+kind.to_upper()+" COMPUTER"

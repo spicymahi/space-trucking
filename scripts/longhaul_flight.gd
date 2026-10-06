@@ -288,7 +288,7 @@ func terminal_command(kind: String, value: String, source: Node=null) -> String:
 		if words.size()!=2 or words[1] not in Terminal.VALID_ROLES: return "Unknown display. Type display for the available roles."
 		var terminal: Node=source if source!=null else active_terminal
 		if terminal==null: return "Use display <role> on the screen you want to change."
-		terminal.set_role(words[1])
+		terminal.set_role(words[1],false)
 		if active_terminal==terminal: frame_terminal(terminal)
 		return "Display assigned: "+words[1].to_upper()+". Assignment is saved with your flight."
 	if words[0]=="go":
@@ -574,6 +574,7 @@ func load_session(path:=SAVE_FILE) -> String:
 	var migration_notice: String=flight.warning if data.get("system_revision",0)!=System.REVISION else ""
 	freight.restore(saved_freight.snapshot())
 	saved_freight.free()
+	for terminal in terminals: terminal.view_history.clear()
 	for i in roles.size(): terminals[i].set_role(roles[i])
 	for i in terminals.size():
 		if not map_views.is_empty() and map_views[i] != null:
@@ -612,6 +613,8 @@ func _run_flight_tests() -> void:
 	ok=(await paper_suite.run(self)) and ok
 	var display_suite=load("res://scripts/longhaul_display_test.gd").new()
 	ok=(await display_suite.run(self)) and ok
+	var return_suite=load("res://scripts/longhaul_terminal_return_test.gd").new()
+	ok=return_suite.run(self) and ok
 	var map_suite=load("res://scripts/longhaul_system_map_test.gd").new()
 	ok=map_suite.run(self) and ok
 	var freight_suite=load("res://scripts/longhaul_freight_test.gd").new()

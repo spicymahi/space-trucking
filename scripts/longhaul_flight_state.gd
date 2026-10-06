@@ -615,7 +615,7 @@ func command_reference(terminal: String) -> String:
 		"map":"map system|route|local | show <body>\nstation <id or number>\nplot <station> direct|economy | print",
 		"distance":"Distance to the destination loaded at NAV"
 	}.get(terminal,"")
-	return reference+"\n\nTab: pin/stow paper | Shift+Tab: next sheet\nDelete: discard sheet | P: read outside CLI\ngo <terminal> | display <role> | manual | clear | help"
+	return reference+"\n\nTab: pin/stow paper | Shift+Tab: next sheet\nDelete: discard sheet | P: read outside CLI\nreturn: previous screen\ngo <terminal> | display <role> | manual | clear | help"
 
 func status(terminal: String) -> String:
 	match terminal:

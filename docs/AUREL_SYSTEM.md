@@ -44,6 +44,7 @@ At CHART or NAV:
 - `show aurel`: the seven stations that orbit Aurel directly, including Helios Anchorage, Farwatch and Beacon Nine. There is no separate outer category.
 - `show <moon>`: only that moon and its stations. Hush and Veil explicitly show “No orbital facilities.” Station numbers on the schematic match the adjacent station directory.
 - `map route`: the active transfer, ship, departure and destination. `map local`: the nearby reference station for approach. These retain actual flight geometry.
+- `return`: go back one screen without retyping its command. This works on every terminal, including help and station details; repeated returns retrace the browsing history. `map system` remains a direct jump to the overview.
 - Browsing uses the full CHART or MAP display. Orbital lanes and station positions are arranged for readability, with no implied distance or bearing scale. Use RADAR/VELOCITY for docking guidance.
 - The selected view stays until changed, including when refocusing the terminal, progressing through flight phases, or saving/reloading. Returning with `map system` highlights the last browsed body. Browsing never selects a destination or alters a flight plan.
 - Both CHART and MAP accept `station <number>` for details and `plot <number> direct|economy` to calculate a transfer. Existing station IDs remain valid.
@@ -72,4 +73,4 @@ Pre-Aurel flight saves retain the player's supplies, needs, fuel, cargo/room sta
 
 Aurel saves serialize the actual position, velocity and planned trajectory legs. Reloading an active route resumes awake at normal time. Autopilot, arrival hold and nose-first docking persist under the same rules as the previous flight release.
 
-Final direct and economy all-pairs runs each pass 1,931 assertions, for 3,862 checks across two orbital configurations. `longhaul_system_test.gd` can test all 210 directed pairs, complete physical flights, moving-body clearances, route budgets with only quoted fuel, multiple orbital epochs, directory paging, numeric destinations and migration. The integrated regression suite passes 283 flight, paper/control, display, map and freight checks. See [FLIGHT.md](FLIGHT.md) for the commands.
+Final direct and economy all-pairs runs each pass 1,931 assertions, for 3,862 checks across two orbital configurations. `longhaul_system_test.gd` can test all 210 directed pairs, complete physical flights, moving-body clearances, route budgets with only quoted fuel, multiple orbital epochs, directory paging, numeric destinations and migration. The integrated regression suite passes 322 flight, paper/control, display, return-navigation, map and freight checks. See [FLIGHT.md](FLIGHT.md) for the commands.
