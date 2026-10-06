@@ -8,10 +8,11 @@ func check(value: bool, description: String) -> void:
 	print("PAPER ",description,": ",value)
 
 func screen_rect(host, mesh: MeshInstance3D) -> Rect2:
-	var extent: Vector2=mesh.mesh.size
 	var points: Array[Vector2]=[]
-	for x in [-1,1]:
-		for y in [-1,1]: points.append(host.camera.unproject_position(mesh.to_global(Vector3(x*extent.x/2,y*extent.y/2,0))))
+	# Imported screens have baked mesh coordinates rather than QuadMesh.size.
+	for surface in mesh.mesh.get_surface_count():
+		for vertex in mesh.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]:
+			points.append(host.camera.unproject_position(mesh.to_global(vertex)))
 	var result:=Rect2(points[0],Vector2.ZERO)
 	for point in points: result=result.expand(point)
 	return result

@@ -50,6 +50,7 @@ func _ready() -> void:
 		if child.get_script()==preload("res://scripts/longhaul_cockpit.gd"):
 			cockpit_module=child
 			break
+	preload("res://scripts/longhaul_blender_assets.gd").install(self,cockpit_module)
 	var roles={"nav":"chart","dock":"nav","fuel":"checklist","drive":"engine","comms":"comms","radar":"radar","power":"velocity"}
 	for panel in cockpit_module.monitor_faces:
 		var terminal:=Terminal.new()
@@ -608,7 +609,8 @@ func load_session(path:=SAVE_FILE) -> String:
 func _run_flight_tests() -> void:
 	await _frames(5)
 	var suite=load("res://scripts/longhaul_flight_test.gd").new()
-	var ok: bool=await suite.run(self)
+	var asset_ok: bool=preload("res://scripts/longhaul_blender_test.gd").new().run(self)
+	var ok: bool=(await suite.run(self)) and asset_ok
 	var paper_suite=load("res://scripts/longhaul_flight_guidance_test.gd").new()
 	ok=(await paper_suite.run(self)) and ok
 	var display_suite=load("res://scripts/longhaul_display_test.gd").new()
@@ -629,7 +631,14 @@ func _capture_flight() -> void:
 	var index:=args.find("--flight-capture")
 	var mode:=args[index+1] if index+1<args.size() else "pilot"
 	automatic_save_timer=INF
-	if mode in ["system","map-aurel","map-brume","map-hush"]:
+	if mode in ["blender-hab","blender-engineering","blender-forward"]:
+		seated=false
+		paused=true
+		set_physics_process(false)
+		player.position=Vector3(0,0.05,-4.5) if mode=="blender-hab" else (Vector3(0,0.05,10.5) if mode=="blender-engineering" else Vector3(0,0.05,-11.55))
+		player.rotation=Vector3.ZERO
+		camera.rotation=Vector3(-0.08,0,0)
+	elif mode in ["system","map-aurel","map-brume","map-hush"]:
 		terminals[0].set_role("chart")
 		open_terminal(terminals[0])
 		terminals[0].submit("map system" if mode=="system" else "show "+mode.trim_prefix("map-"))
