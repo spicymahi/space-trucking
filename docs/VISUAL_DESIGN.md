@@ -71,7 +71,12 @@ All flight preparation and planning must happen on the physical cockpit computer
 - The longest normal journey should take at most roughly 30 minutes of actual player time aboard the ship, not 30 in-game minutes. Sleep and time acceleration can shorten the wait. There are no delivery deadlines, inspections, or violence.
 - Coast time supports food, drink, hygiene, sleep, cargo checks, and temporary repairs. Arrival returns to manual flying and docking.
 
-Proposed defaults to validate during implementation: stop sleep/time skips before maneuvers, provide advance return-to-cockpit warnings, and allow recovery from missed burns through route recalculation. These are design proposals, not completed systems.
+- Provide advance maneuver warnings so the player has time to return to the cockpit.
+- Stop sleep and time acceleration before a required burn, leaving time to prepare and take the controls.
+- Allow route recalculation and recovery if the player misses a burn.
+- Keep the experience cozy, with no delivery deadlines or punitive scheduling.
+
+These are confirmed flight requirements; implementation has not started.
 
 ## Launch and validation snapshot
 
