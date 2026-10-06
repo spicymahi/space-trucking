@@ -80,7 +80,7 @@ The flight world now uses a shared catalogue for one ringed gas giant, eight moo
 
 Stations use seven industrial silhouette families: freight platforms, habitats, shipyards, refineries, mining facilities, greenhouses, and research/relay structures. Their shared K-01 berth preserves the approved manual approach, nose-first docking and cargo ramp workflow. The first station implementation provides the exterior, berth, freight pallet, and terminal services; unique walkable concourses and shops remain future work.
 
-The cockpit map has a compressed, explicitly marked system overview so all fifteen stations remain legible on a physical CRT. Route and local views show the actual flight geometry. The exterior sky uses a separate astronomical rendering layer to preserve large body silhouettes without reducing the cockpit's depth precision. Bodies retain their apparent angular size as the ship moves.
+The cockpit map separates overview and station browsing. The overview contains only Aurel, its rings and eight unlabeled moon orbits, with all nine body names in a side directory. `show <name>` opens a body and a readable directory of its own stations; Aurel includes all seven directly orbiting stations, including the distant ports. Station close-ups use evenly spaced symbols for clarity. CHART and MAP use the full display, retain the chosen view, and save it per terminal. Route and local views retain actual flight geometry with only the relevant station endpoints. The exterior sky uses a separate astronomical rendering layer to preserve large body silhouettes without reducing the cockpit's depth precision. Bodies retain their apparent angular size as the ship moves.
 
 ## Launch and validation snapshot
 

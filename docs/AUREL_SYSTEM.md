@@ -6,6 +6,8 @@ Longhaul is the player's home. The current setting has one ringed gas giant, eig
 
 ![The live system map on a physical Longhaul terminal](screenshots/aurel-system-map.png)
 
+![Aurel's direct-orbit stations in the uncluttered body view](screenshots/aurel-station-map.png)
+
 ## Geography
 
 Aurel's catalogue radius is 58,000 km. Its rings span 76,000–140,000 km from the planet center. The eight moons are Ember, Slate, Brume, Morrow, Rime, Ochre, Hush and Veil. They range from 215,000 km to 2,100,000 km orbital radius. Hush and Veil have no local station, preserving remote scenery and space for later expansion. Brume and Morrow have visible atmospheres without atmospheric gameplay.
@@ -38,7 +40,13 @@ At CHART or NAV:
 - `station brume` or `station 09`: station name, region, purpose, imports and exports.
 - At CHART, `plot brume direct` or `plot 09 economy`: calculate a safe route, then print the sheet.
 - Enter the printed coordinates, burn and reserve at NAV as before; `load` selects the destination.
-- Map views: `map system`, `map route`, `map local`, and `map auto`. The full system view shows the authored geography; route view follows the journey; local view supports approach. Automatic mode chooses the useful scale.
+- `map system`: an unlabeled schematic of Aurel, its rings and eight moon orbits. The side directory lists Aurel and all eight moons; no stations, routes or ship markers clutter the overview.
+- `show aurel`: the seven stations that orbit Aurel directly, including Helios Anchorage, Farwatch and Beacon Nine. There is no separate outer category.
+- `show <moon>`: only that moon and its stations. Hush and Veil explicitly show “No orbital facilities.” Station numbers on the schematic match the adjacent station directory.
+- `map route`: the active transfer, ship, departure and destination. `map local`: the nearby reference station for approach. These retain actual flight geometry.
+- Browsing uses the full CHART or MAP display. Orbital lanes and station positions are arranged for readability, with no implied distance or bearing scale. Use RADAR/VELOCITY for docking guidance.
+- The selected view stays until changed, including when refocusing the terminal, progressing through flight phases, or saving/reloading. Returning with `map system` highlights the last browsed body. Browsing never selects a destination or alters a flight plan.
+- Both CHART and MAP accept `station <number>` for details and `plot <number> direct|economy` to calculate a transfer. Existing station IDs remain valid.
 
 Each trip has a computed future intercept and smooth waypoint legs. NAV samples moving moons at future route times, conservatively avoids the entire ring envelope, and checks required acceleration and fuel before offering the route. The controller then uses actual six-axis thrust to follow that path. Delayed manual departures trigger an updated interception calculation; no second coordinate transcription is required.
 
@@ -64,4 +72,4 @@ Pre-Aurel flight saves retain the player's supplies, needs, fuel, cargo/room sta
 
 Aurel saves serialize the actual position, velocity and planned trajectory legs. Reloading an active route resumes awake at normal time. Autopilot, arrival hold and nose-first docking persist under the same rules as the previous flight release.
 
-Final direct and economy all-pairs runs each pass 1,931 assertions, for 3,862 checks across two orbital configurations. `longhaul_system_test.gd` can test all 210 directed pairs, complete physical flights, moving-body clearances, route budgets with only quoted fuel, multiple orbital epochs, directory paging, numeric destinations and migration. The integrated regression suite passes 266 flight, paper/control, display, map and freight checks. See [FLIGHT.md](FLIGHT.md) for the commands.
+Final direct and economy all-pairs runs each pass 1,931 assertions, for 3,862 checks across two orbital configurations. `longhaul_system_test.gd` can test all 210 directed pairs, complete physical flights, moving-body clearances, route budgets with only quoted fuel, multiple orbital epochs, directory paging, numeric destinations and migration. The integrated regression suite passes 283 flight, paper/control, display, map and freight checks. See [FLIGHT.md](FLIGHT.md) for the commands.

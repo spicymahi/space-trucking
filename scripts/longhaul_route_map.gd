@@ -1,48 +1,109 @@
 extends Control
-## Live ephemerides on a readable orthographic cassette-era traffic chart.
-## System view compresses orbital spacing; route and local views are orthographic.
+## Body-first navigation schematic. Directory browsing never changes the flight plan.
+## Overview/neighborhood spacing favors readability; route/local retain flight geometry.
 const System = preload("res://scripts/longhaul_system.gd")
 const GREEN := Color("9fe7b1")
 const AMBER := Color("f3d38e")
 const DIM := Color("345347")
 const TRAIL := Color("65c9b0")
-const MODES := ["auto", "system", "route", "local"]
+const MODES := ["system", "route", "local"]
 var host: Node3D
 var map_font: Font
 var tint := GREEN
-var mode := "auto"
+var mode := "system"
+var selected_body := -1 # Aurel; 0..7 are moons. Retained when returning to overview.
 var centre := Vector3.ZERO
 var map_scale := 0.00028
 var plot_bounds := Rect2()
 var label_boxes: Array[Rect2] = []
 var station_label_boxes: Dictionary = {}
 var moon_label_boxes: Dictionary = {}
-var _orbit_paths: Array[PackedVector3Array] = []
 var _route_cache := PackedVector3Array()
 var _route_key := ""
 var _projection_mode := "system"
+var directory_boxes: Array[Rect2] = []
+var _schematic_radii: Array[float] = []
 
 func set_mode(value: String) -> bool:
 	var wanted := value.strip_edges().to_lower()
+	# Old command remains harmless; all browsing views now stay where the pilot puts them.
+	if wanted == "auto": wanted = "system"
 	if wanted not in MODES: return false
 	mode = wanted
 	queue_redraw()
 	return true
 
+func show_body(value: String) -> bool:
+	var wanted := value.strip_edges().to_lower()
+	var found := -2
+	if wanted == "aurel": found = -1
+	for index in System.MOONS.size():
+		if wanted == System.MOONS[index].id: found = index
+	if found == -2: return false
+	selected_body = found
+	mode = "body"
+	queue_redraw()
+	return true
+
 func resolved_mode() -> String:
-	if mode != "auto": return mode
-	if not host: return "system"
-	var state = host.flight
-	if state.phase == "docked" or state.plan.is_empty(): return "system"
-	if state.nav_selected and state.phase in ["brake", "approach"] and state.station_range() < 12000:
-		return "local"
-	return "route"
+	return mode
+
+func body_name() -> String:
+	return "AUREL" if selected_body < 0 else str(System.MOONS[selected_body].name).to_upper()
+
+func visible_station_ids() -> Array[int]:
+	var result: Array[int] = []
+	if mode == "system": return result
+	if mode == "body":
+		for index in System.STATIONS.size():
+			if int(System.STATIONS[index].moon) == selected_body: result.append(index)
+		result.sort_custom(func(a, b): return System.STATIONS[a].number < System.STATIONS[b].number)
+	elif host:
+		var state = host.flight
+		if mode == "local": result.append(state.reference_station_id())
+		else:
+			result.append(state.dock_id)
+			if (state.nav_selected or not state.plan.is_empty()) and state.destination != state.dock_id:
+				result.append(state.destination)
+	return result
+
+func snapshot() -> Dictionary:
+	return {"mode": mode, "body": selected_body}
+
+static func valid_view(data: Variant) -> bool:
+	if not data is Dictionary or data.get("mode", "") not in ["system", "body", "route", "local"]: return false
+	var body = data.get("body")
+	return (body is int or body is float) and is_finite(float(body)) and body == int(body) and body >= -1 and body < System.MOONS.size()
+
+func restore(data: Dictionary) -> bool:
+	if not valid_view(data): return false
+	mode = data.mode
+	selected_body = int(data.body)
+	queue_redraw()
+	return true
 
 func point(world: Vector3) -> Vector2:
 	var relative := world - centre
 	var planar := Vector2(relative.x, relative.z)
-	if _projection_mode == "system": planar = planar.normalized() * sqrt(planar.length())
+	if _projection_mode in ["system", "body"]:
+		return plot_bounds.get_center() + planar.normalized() * _schematic_radius(planar.length())
 	return plot_bounds.get_center() + planar * map_scale
+
+func _schematic_radius(radius: float) -> float:
+	var outer := minf(plot_bounds.size.x, plot_bounds.size.y) * 0.5 - 18
+	var inner := 40.0
+	if _schematic_radii.is_empty(): return 0.0
+	var previous_radius := 0.0
+	var previous_pixel := 0.0
+	for index in _schematic_radii.size():
+		var next_pixel := lerpf(inner, outer, float(index) / maxf(1, _schematic_radii.size() - 1))
+		if _schematic_radii.size() == 1: next_pixel = outer * 0.78
+		var next_radius := _schematic_radii[index]
+		if radius <= next_radius:
+			return lerpf(previous_pixel, next_pixel, radius / next_radius if index == 0 else (radius - previous_radius) / (next_radius - previous_radius))
+		previous_radius = next_radius
+		previous_pixel = next_pixel
+	return previous_pixel + (radius - previous_radius) / maxf(previous_radius, 1) * 15.0
 
 func route_vertices() -> PackedVector3Array:
 	if not host or host.flight.plan.is_empty():
@@ -70,30 +131,24 @@ func route_vertices() -> PackedVector3Array:
 			if item is Vector3: _route_cache.append(item)
 	return _route_cache
 
-func _prepare_orbits() -> void:
-	if not _orbit_paths.is_empty(): return
-	for index in System.MOONS.size():
-		var radius: float = System.MOONS[index].radius_km / System.REAL_KM_PER_UNIT
-		var period := TAU * sqrt(pow(radius, 3) / System.MU)
-		var path := PackedVector3Array()
-		for sample in 97: path.append(System.moon_position(index, period * float(sample) / 96.0))
-		_orbit_paths.append(path)
-
 func update_projection() -> void:
 	if not host: return
-	_prepare_orbits()
-	plot_bounds = Rect2(Vector2(12, 24), Vector2(maxf(1, size.x - 24), maxf(1, size.y - 78)))
+	plot_bounds = Rect2(Vector2(12, 30), Vector2(maxf(1, size.x - 24), maxf(1, size.y - 88)))
 	var state = host.flight
 	var chosen := resolved_mode()
 	_projection_mode = chosen
-	if chosen == "system": plot_bounds.size.x = size.x * 0.53 - 24
+	_schematic_radii.clear()
+	if chosen in ["system", "body"]:
+		plot_bounds.size.x = size.x * 0.53 - 24
+		centre = System.PLANET if chosen == "system" or selected_body < 0 else System.moon_position(selected_body, state.elapsed)
+		if chosen == "system":
+			for moon in System.MOONS: _schematic_radii.append(float(moon.radius_km) / System.REAL_KM_PER_UNIT)
+		else:
+			for index in visible_station_ids(): _schematic_radii.append(float(System.STATIONS[index].radius_km) / System.REAL_KM_PER_UNIT)
+		_schematic_radii.sort()
+		return
 	var targets := PackedVector3Array([state.ship_position])
-	if chosen == "system":
-		targets.append(System.PLANET)
-		for path in _orbit_paths:
-			for item in path: targets.append(item)
-		for index in System.STATIONS.size(): targets.append(System.station_position(index, state.elapsed))
-	elif chosen == "route":
+	if chosen == "route":
 		for item in route_vertices(): targets.append(item)
 		if state.nav_selected or not state.plan.is_empty(): targets.append(System.station_position(state.destination, state.elapsed))
 	elif chosen == "local":
@@ -103,14 +158,6 @@ func update_projection() -> void:
 	for item in targets:
 		low = low.min(item)
 		high = high.max(item)
-	if chosen == "system":
-		centre = System.PLANET
-		var largest := 1.0
-		for target in targets:
-			var relative := target - centre
-			largest = maxf(largest, Vector2(relative.x, relative.z).length())
-		map_scale = minf(plot_bounds.size.x - 64, plot_bounds.size.y - 24) * 0.5 / sqrt(largest)
-		return
 	centre = (low + high) * 0.5
 	var extent := high - low
 	var minimum := 1400.0 if chosen == "local" else 8000.0
@@ -123,13 +170,17 @@ func _draw() -> void:
 	label_boxes.clear()
 	station_label_boxes.clear()
 	moon_label_boxes.clear()
+	directory_boxes.clear()
 	var state = host.flight
 	var chosen := resolved_mode()
+	if chosen in ["system", "body"]:
+		_draw_schematic(state, chosen)
+		return
 	for x in range(0, int(size.x), 64): draw_line(Vector2(x, 20), Vector2(x, size.y - 49), Color("142c23"))
 	for y in range(22, int(size.y) - 48, 42): draw_line(Vector2(0, y), Vector2(size.x, y), Color("142c23"))
 	draw_line(Vector2(0, size.y - 47), Vector2(size.x, size.y - 47), DIM)
 	draw_string(map_font, Vector2(6, 18), "AUREL / " + chosen.to_upper() + " / X-Z", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, GREEN)
-	draw_string(map_font, Vector2(size.x - 259, 18), "8 MOONS  /  15 STATIONS", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, DIM.lightened(0.2))
+
 	_draw_bodies(state.elapsed, chosen)
 	_draw_route(state, chosen)
 	# Reserve pilot and target labels before placing the remaining station numbers.
@@ -142,19 +193,16 @@ func _draw() -> void:
 		draw_colored_polygon(PackedVector2Array([here + forward * 9, here - forward * 6 + right * 5, here - forward * 3, here - forward * 6 - right * 5]), AMBER)
 		_draw_label(here, "LH", AMBER, 21, 12)
 	var selected: int = state.destination if state.nav_selected or not state.plan.is_empty() else -1
-	if selected >= 0: _draw_station(selected, state.elapsed, true)
-	for index in System.STATIONS.size():
-		if index != selected: _draw_station(index, state.elapsed, false)
+	for index in visible_station_ids():
+		_draw_station(index, state.elapsed, index == selected)
 	if chosen != "local":
 		for index in System.MOONS.size():
 			var moon_point := point(System.moon_position(index, state.elapsed))
 			if plot_bounds.has_point(moon_point):
 				moon_label_boxes[index] = _draw_label(moon_point, str(System.MOONS[index].name).to_upper(), GREEN.darkened(0.22), 18, 10, false)
-	if chosen == "system": _draw_directory(selected, state.dock_id if state.phase == "docked" else -1)
 	_draw_footer(state, chosen, selected)
 
 func _draw_bodies(when: float, chosen: String) -> void:
-	for path in _orbit_paths: _draw_path(path, Color("243e32"), 1)
 	var planet := point(System.PLANET)
 	var body_radius := maxf(6, _radius_pixels(System.PLANET_RADIUS, System.PLANET))
 	var outer_radius := maxf(body_radius + 5, _radius_pixels(System.RING_OUTER, System.PLANET))
@@ -196,7 +244,7 @@ func _draw_route(state, chosen: String) -> void:
 		_draw_segment(point(state.ship_position), point(System.station_position(state.destination, state.elapsed)), AMBER.darkened(0.15), 1, true)
 
 func _draw_station(index: int, when: float, selected: bool) -> void:
-	var position := point(System.station_position(index, when))
+	var position := station_point(index, when)
 	if not plot_bounds.has_point(position): return
 	var color := AMBER if selected else GREEN
 	draw_rect(Rect2(position - Vector2(4, 4), Vector2(8, 8)), color, false, 1.5)
@@ -204,6 +252,16 @@ func _draw_station(index: int, when: float, selected: bool) -> void:
 	var station: Dictionary = System.STATIONS[index]
 	var number := "%02d" % int(station.get("number", index + 1))
 	station_label_boxes[index] = _draw_label(position, number, color, 23 if size.y > 300 else 21, 12)
+
+func station_point(index: int, when: float) -> Vector2:
+	if mode != "body": return point(System.station_position(index, when))
+	# Neighborhoods are a directory schematic, never a docking-bearing instrument.
+	# Equal spacing prevents clustered inner ports from obscuring one another.
+	var stations := visible_station_ids()
+	var row := stations.find(index)
+	var angle := -PI * 0.5 + TAU * row / maxf(1, stations.size())
+	if stations.size() == 1: angle = -PI * 0.25
+	return plot_bounds.get_center() + Vector2.from_angle(angle) * minf(plot_bounds.size.x, plot_bounds.size.y) * 0.36
 
 func _draw_footer(state, chosen: String, selected: int) -> void:
 	var destination := "SELECT A DESTINATION AT CHART"
@@ -227,26 +285,65 @@ func _draw_footer(state, chosen: String, selected: int) -> void:
 func _radius_pixels(radius: float, at: Vector3) -> float:
 	return point(at + Vector3.RIGHT * radius).distance_to(point(at))
 
-func _draw_directory(selected: int, docked: int) -> void:
-	var start_x := size.x * 0.55
+func _draw_schematic(state, chosen: String) -> void:
 	var compact := size.y < 300
-	var columns := 2 if compact else 1
-	var per_column := 8 if compact else 15
-	var spacing := 23 if compact else 20
-	var font_size := 19 if compact else 22
-	var column_width := (size.x - start_x - 8) / columns
-	var sorted := System.STATIONS.duplicate()
-	sorted.sort_custom(func(a, b): return a.number < b.number)
-	for row in sorted.size():
-		var station: Dictionary = sorted[row]
-		var column := int(row / per_column)
-		var y := 45 + (row % per_column) * spacing
-		var x := start_x + column * column_width
-		var index := System.IDS.find(station.id)
-		var color := AMBER if index == selected else GREEN
-		if index == docked and selected < 0: color = AMBER
-		var caption := "%02d %s" % [station.number, str(station.name).to_upper()]
-		draw_string(map_font, Vector2(x, y), caption, HORIZONTAL_ALIGNMENT_LEFT, column_width - 6, font_size, color)
+	var x := size.x * 0.55
+	var text_width := size.x - x - 8
+	var title := "AUREL / SYSTEM" if chosen == "system" else body_name() + " / STATIONS"
+	draw_string(map_font, Vector2(6, 19), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 23, GREEN)
+	draw_line(Vector2(x - 14, 30), Vector2(x - 14, size.y - 58), DIM)
+	draw_line(Vector2(0, size.y - 47), Vector2(size.x, size.y - 47), DIM)
+	var center := plot_bounds.get_center()
+	if chosen == "system":
+		for index in System.MOONS.size():
+			var moon := point(System.moon_position(index, state.elapsed))
+			var selected := index == selected_body
+			_draw_circle_clipped(center, _schematic_radius(_schematic_radii[index]), DIM.darkened(0.25), 1)
+			draw_circle(moon, 4.5 if selected else 3.5, AMBER if selected else GREEN)
+			if selected: draw_circle(moon, 8, AMBER, false, 1)
+		_draw_schematic_body(center, true, 13, selected_body == -1)
+		var row_height := 19.0 if compact else 30.0
+		for row in 9:
+			var caption := "AUREL" if row == 0 else str(System.MOONS[row - 1].name).to_upper()
+			_directory_row(x, 48 + row * row_height, text_width, caption, selected_body == row - 1, 18 if compact else 27)
+		draw_string(map_font, Vector2(6, size.y - 24), "show <name> / OPEN BODY", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, AMBER)
+		draw_string(map_font, Vector2(6, size.y - 3), "SCHEMATIC / map route / map local", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, GREEN.darkened(0.15))
+	else:
+		_draw_schematic_body(center, selected_body < 0, 22, true)
+		var stations := visible_station_ids()
+		var selected: int = state.destination if state.nav_selected or not state.plan.is_empty() else -1
+		for index in stations:
+			_draw_station(index, state.elapsed, index == selected)
+		var row_height := 25.0 if compact else 39.0
+		for row in stations.size():
+			var index := stations[row]
+			var station: Dictionary = System.STATIONS[index]
+			var caption := "%02d %s" % [station.number, str(station.name).to_upper()]
+			_directory_row(x, 48 + row * row_height, text_width, caption, index == selected, 20 if compact else 25)
+		if stations.is_empty():
+			draw_string(map_font, Vector2(x, 60), "NO ORBITAL FACILITIES", HORIZONTAL_ALIGNMENT_LEFT, text_width, 23, GREEN)
+			draw_string(map_font, Vector2(x, 90), "Moon survey only.", HORIZONTAL_ALIGNMENT_LEFT, text_width, 21, GREEN.darkened(0.2))
+		draw_string(map_font, Vector2(6, size.y - 24), "map system / RETURN TO OVERVIEW", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, AMBER)
+		draw_string(map_font, Vector2(6, size.y - 3), "SCHEMATIC / station <number> / plot <number> direct" if not stations.is_empty() else "SCHEMATIC / show <name> / OPEN ANOTHER BODY", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, GREEN.darkened(0.15))
+
+func _draw_schematic_body(at: Vector2, rings: bool, radius: float, selected: bool) -> void:
+	var color := AMBER if selected else GREEN
+	if rings:
+		var ellipse := PackedVector2Array()
+		for step in 65:
+			var angle := TAU * step / 64.0
+			ellipse.append(at + Vector2(cos(angle) * radius * 1.8, sin(angle) * radius * 0.6).rotated(-0.35))
+		draw_polyline(ellipse, color.darkened(0.25), 1.5, true)
+	draw_circle(at, radius, Color("18362a"))
+	draw_circle(at, radius, color, false, 1.5)
+	# Reserve the body silhouette before station-number labels are placed.
+	label_boxes.append(Rect2(at - Vector2.ONE * (radius + 7), Vector2.ONE * (radius + 7) * 2))
+
+func _directory_row(x: float, baseline: float, width: float, caption: String, selected: bool, font_size: int) -> void:
+	var box := Rect2(Vector2(x - 5, baseline - font_size + 2), Vector2(width + 5, font_size + 1))
+	directory_boxes.append(box)
+	if selected: draw_rect(box, Color("293729"))
+	draw_string(map_font, Vector2(x + 4, baseline), ("> " if selected else "  ") + caption, HORIZONTAL_ALIGNMENT_LEFT, width - 6, font_size, AMBER if selected else GREEN)
 
 func _draw_label(anchor: Vector2, caption: String, color: Color, font_size: int, gap: float, required := true) -> Rect2:
 	var text_size := map_font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)

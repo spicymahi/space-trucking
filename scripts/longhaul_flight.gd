@@ -3,6 +3,7 @@ extends "res://scripts/longhaul_preview.gd"
 const FlightState = preload("res://scripts/longhaul_flight_state.gd")
 const Terminal = preload("res://scripts/longhaul_terminal.gd")
 const System = preload("res://scripts/longhaul_system.gd")
+const RouteMap = preload("res://scripts/longhaul_route_map.gd")
 const Freight = preload("res://scripts/longhaul_freight.gd")
 const SAVE_FILE := "user://longhaul_flight_v1.json"
 var flight := FlightState.new()
@@ -523,7 +524,10 @@ func save_session(path:=SAVE_FILE) -> String:
 	sync_hardware()
 	var data:=flight.snapshot()
 	data["display_roles"]=[]
-	for terminal in terminals: data.display_roles.append(terminal.kind)
+	data["map_views"]=[]
+	for terminal in terminals:
+		data.display_roles.append(terminal.kind)
+		data.map_views.append(terminal.chart_map.snapshot() if terminal.chart_map else null)
 	data["paper_pinned"]=paper_pinned
 	data["freight"]=freight.snapshot()
 	data["rooms"]={"crate_slot":cargo_module.crate_slot,"locked":cargo_module.locked,"repaired":engineering_module.repaired,"isolated":engineering_module.isolated,"cover":engineering_module.cover_open,"fuses":engineering_module.fuse_pattern.duplicate(),"bypass":engineering_module.bypass_ready}
@@ -553,6 +557,12 @@ func load_session(path:=SAVE_FILE) -> String:
 		for role in data.display_roles:
 			if not role is String or role not in Terminal.VALID_ROLES: return "Save display role invalid."
 		roles=data.display_roles
+	var map_views: Array=[]
+	if data.has("map_views"):
+		if not data.map_views is Array or data.map_views.size()!=terminals.size(): return "Save map layout invalid."
+		for view in data.map_views:
+			if view != null and not RouteMap.valid_view(view): return "Save map view invalid."
+		map_views=data.map_views
 	if data.has("paper_pinned") and not data.paper_pinned is bool: return "Save paper layout invalid."
 	var saved_freight=Freight.new()
 	if data.has("freight") and (not data.freight is Dictionary or not saved_freight.restore(data.freight)):
@@ -565,6 +575,11 @@ func load_session(path:=SAVE_FILE) -> String:
 	freight.restore(saved_freight.snapshot())
 	saved_freight.free()
 	for i in roles.size(): terminals[i].set_role(roles[i])
+	for i in terminals.size():
+		if not map_views.is_empty() and map_views[i] != null:
+			terminals[i].restore_map_view(map_views[i])
+		elif terminals[i].chart_map:
+			terminals[i].chart_map.restore({"mode":"system","body":-1})
 	paper_pinned=data.get("paper_pinned",false)
 	ramp_up=flight.ramp_raised
 	ramp_pivot.rotation.x=-PI/2 if ramp_up else atan(1.2/4.2)
@@ -611,10 +626,10 @@ func _capture_flight() -> void:
 	var index:=args.find("--flight-capture")
 	var mode:=args[index+1] if index+1<args.size() else "pilot"
 	automatic_save_timer=INF
-	if mode=="system":
-		terminals[0].set_role("map")
+	if mode in ["system","map-aurel","map-brume","map-hush"]:
+		terminals[0].set_role("chart")
 		open_terminal(terminals[0])
-		terminals[0].submit("map system")
+		terminals[0].submit("map system" if mode=="system" else "show "+mode.trim_prefix("map-"))
 	elif mode=="aurel":
 		var pose: Dictionary=system_visuals.overview_pose()
 		flight.ship_position=pose.position

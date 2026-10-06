@@ -606,13 +606,13 @@ func station_details(id: String) -> String:
 
 func command_reference(terminal: String) -> String:
 	var reference: String={
-		"chart":"stations 1|2|3 | station <id>\nplot <station> direct|economy\nroute | print | map",
+		"chart":"stations 1|2|3 | station <id>\nplot <station> direct|economy\nroute | print\nmap system|route|local | show <body>",
 		"nav":"coords <x> <y> <z>  (km)\nburn <kg/s> | reserve <kg> | load\nengage | manual | recalc | warp 1|5|20\napproach | auto dock | dock\nstations 1|2|3 | station <id> | status",
 		"checklist":"status | print\nhatch close|open | ramp raise|lower\nPhysical cargo clamps must also be secured.",
 		"fuel":"status  (fuel and spare-fuel monitor)",
 		"engine":"port on|off\nstarboard on|off\nstatus  (live engine diagram)",
 		"comms":"request | code <takeoff-code> | depart\napproach (assign berth K-01) | auto dock | dock\nrefuel | service | rescue | save | load",
-		"map":"Live journey map / automatic approach zoom",
+		"map":"map system|route|local | show <body>\nstation <id or number>\nplot <station> direct|economy | print",
 		"distance":"Distance to the destination loaded at NAV"
 	}.get(terminal,"")
 	return reference+"\n\nTab: pin/stow paper | Shift+Tab: next sheet\nDelete: discard sheet | P: read outside CLI\ngo <terminal> | display <role> | manual | clear | help"

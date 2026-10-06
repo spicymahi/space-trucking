@@ -73,15 +73,23 @@ func set_role(role: String) -> bool:
 	for item in [header,readout,prompt,telemetry_note]:
 		item.add_theme_color_override("font_color",tint)
 	footer.add_theme_color_override("font_color",tint.darkened(0.18))
-	if kind in ["chart","map"] and not chart_map:
-		chart_map=preload("res://scripts/longhaul_route_map.gd").new()
-		chart_map.host=host
-		chart_map.map_font=host.font
-		chart_map.position=Vector2(24,98)
-		chart_map.size=Vector2(770,275)
-		viewport.add_child(chart_map)
+	if kind in ["chart","map"]: ensure_chart_map()
 	refresh()
 	return true
+
+func ensure_chart_map() -> void:
+	if chart_map: return
+	chart_map=preload("res://scripts/longhaul_route_map.gd").new()
+	chart_map.host=host
+	chart_map.map_font=host.font
+	chart_map.position=Vector2(24,100)
+	chart_map.size=Vector2(792,405)
+	viewport.add_child(chart_map)
+
+func restore_map_view(data: Dictionary) -> void:
+	ensure_chart_map()
+	chart_map.restore(data)
+	refresh()
 
 func label(at: Vector2, size_px: int, tint: Color) -> Label:
 	var item:=Label.new()
@@ -111,12 +119,19 @@ func submit(value: String) -> void:
 	show_help=false
 	var command:=value.strip_edges().to_lower()
 	var words:=command.split(" ",false)
-	var map_command: bool=kind in ["chart","map"] and words[0]=="map"
+	var map_command: bool=kind in ["chart","map"] and words[0] in ["map","show"]
 	show_map=false
-	if map_command and words.size()<=2 and (words.size()==1 or words[1] in ["auto","system","route","local"]):
-		chart_map.set_mode(words[1] if words.size()==2 else "auto")
-		show_map=true
-		show_live=true
+	if map_command:
+		var accepted: bool=false
+		if words[0]=="show" and words.size()==2:
+			accepted=chart_map.show_body(words[1])
+		elif words[0]=="map" and words.size()<=2:
+			accepted=words.size()==1 or chart_map.set_mode(words[1])
+		show_map=accepted
+		show_live=accepted
+		lines.clear()
+		if not accepted:
+			append("Unknown map view or body. View preserved.\nUse map system, map route, or map local.\nUse show aurel or show <moon name>.\nMoon names are listed on map system.")
 		entry=""
 		refresh()
 		return
@@ -125,7 +140,8 @@ func submit(value: String) -> void:
 		show_live=true
 	else:
 		var old_kind:=kind
-		var result: String=host.terminal_command(kind,value,self)
+		var command_role: String="chart" if kind=="map" and words[0] in ["stations","destinations","station","plot","route","print"] else kind
+		var result: String=host.terminal_command(command_role,value,self)
 		lines.clear()
 		show_live=old_kind!=kind
 		if kind=="engine" and result==host.flight.engine_diagram(): show_live=true
@@ -183,12 +199,12 @@ func refresh() -> void:
 		readout.text=state.engine_diagram()
 		readout.add_theme_font_size_override("font_size",30)
 	if kind=="checklist": readout.text=state.checklist()
-	if kind=="map" or (kind=="chart" and show_map):
+	if kind in ["chart","map"]:
 		chart_map.visible=true
 		chart_map.position=Vector2(24,100)
 		chart_map.size=Vector2(792,405)
 		readout.text=""
-		header.text="K-01 / %s / AUREL\nmap system|route|local|auto" % kind.to_upper()
+		header.text="K-01 / %s\nshow <name> | map system / route / local" % kind.to_upper()
 		chart_map.queue_redraw()
 	if kind=="distance":
 		header.text="K-01 / DISTANCE\nSTATION RANGE / NAV LINK"
@@ -202,14 +218,6 @@ func refresh() -> void:
 			telemetry_note.text="NO DESTINATION LOADED AT NAV"
 	if kind=="velocity": _show_velocity()
 	if kind=="radar": _show_radar()
-	if kind=="chart" and chart_map and not show_map:
-		chart_map.visible=true
-		chart_map.position=Vector2(24,98)
-		chart_map.size=Vector2(770,275)
-		chart_map.queue_redraw()
-		readout.position=Vector2(24,387)
-		readout.size=Vector2(792,126)
-		readout.text="plot <station> direct|economy\n"+("COORDS "+state.coords_text()+"\nBURN %.2f kg/s   SPARE %.0f kg" % [state.plan.burn,state.plan.reserve] if not state.plan.is_empty() else "stations 1|2|3 / station <id>\nmap system / 15 ports / 8 moons")
 
 func _show_velocity() -> void:
 	var state=host.flight

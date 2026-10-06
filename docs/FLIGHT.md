@@ -21,6 +21,14 @@ Every physical cockpit screen supports `display <role>`, including `display NAV`
 
 RADAR plots the selected station against a central aiming reticle, with signed horizontal and vertical offsets and an explicit indication when the target is behind the ship. Its normal view enlarges range, offsets, closing speed, and heading; press F to see the detailed docking instrument. The upper-left and upper-right monitors sit closer, angle toward the pilot, and have larger screens. VELOCITY measures motion relative to that station in ship axes: sideways, vertical, and forward/backward. Use the radar to line up the station and the velocity display to remove sideways drift and control closing speed. The journey map remains on CHART; a dedicated MAP display is also available.
 
+## Map browsing
+
+CHART and MAP use the full CRT for a clean schematic. `map system` shows Aurel, its rings and eight moon orbits without labels over the map or any station markers. A side directory gives all nine body names.
+
+Type `show brume` (or another moon) to see its orbital facilities. `show aurel` includes every station orbiting the giant directly, including distant Helios Anchorage, Farwatch and Beacon Nine. Hush and Veil show “No orbital facilities.” The station close-up uses evenly spaced markers and a readable numbered directory. `station 09` gives station details; `plot 09 direct` calculates a route. `map system` returns to the overview and highlights the last browsed body.
+
+`map route` shows the actual planned journey and its endpoints; `map local` shows the reference station near the ship. Views stay selected until you change them, and each screen remembers its selection across save/load. Opening a body view does not select or change the flight destination. The overview and body close-ups are schematics for browsing; use RADAR/VELOCITY for docking bearings and speeds.
+
 ## Printed departure checklist
 
 Docked launches open the CHECKLIST computer. Type `print` for a retained paper checklist. The live screen shows every departure requirement and marks completed items. Printing is optional for the interlock; it gives the player a physical reference rather than advancing a tutorial.
@@ -95,7 +103,7 @@ The compressed system uses Aurel central gravity, analytic moon and station ephe
 
 The updated suite passes 133 flight/ship checks, 53 paper/control checks, and 18 display checks. `--flight-test` covers the legacy first-four station journeys in both route modes, direct return trips, fuel/time budgets, manual momentum and nose-first docking, approach alignment and side/rear entry, docking save compatibility, engine loss, clearance and hardware gates, automatic arrival hold, early sleep wakeup, explicit manual takeover/recalculation, JSON save migration, printed commands, paper disposal, physical terminal placement, page/viewport bounds, walking and life interactions. Cockpit checks cover station radar, relative velocity, screen reassignment, and paper hotkeys. Forward+ captures support visual review of the actual cockpit screens and printer.
 
-The same run additionally passes 11 system-map checks and 51 freight checks, bringing the integrated total to **266 passing checks**. Freight coverage exercises all station bookings, manual pickup and ramp traversal, clamp operation, destination unloading and payment, crew fees, and save/load.
+The same run additionally passes 28 system-map checks and 51 freight checks, bringing the integrated total to **283 passing checks**. Freight coverage exercises all station bookings, manual pickup and ramp traversal, clamp operation, destination unloading and payment, crew fees, and save/load.
 
 ```sh
 /Applications/Godot.app/Contents/MacOS/Godot --headless --fixed-fps 60 --path . --log-file /tmp/longhaul-flight-test.log res://scenes/longhaul_flight.tscn -- --flight-test
