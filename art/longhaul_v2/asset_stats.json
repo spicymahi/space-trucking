@@ -1,0 +1,20 @@
+{
+  "mesh_triangles": 66440,
+  "objects": 92,
+  "blender_bounds_m": {
+    "min": [
+      -5.438,
+      -11.72,
+      0.085
+    ],
+    "max": [
+      5.438,
+      14.739,
+      5.745
+    ]
+  },
+  "export": "longhaul_v2.glb",
+  "game_alignment": "GLB is Y-up, nose -Z. Root shifted down 1.4m to match existing Godot deck origin.",
+  "animation": "Cargo_Ramp_Open, frames 1 closed to 80 lowered, 24fps.",
+  "scope": "Exterior study only; no collision shapes, working interior, or gameplay integration."
+}
