@@ -1,3 +1,21 @@
+## Cargo loop test
+
+The new focused cargo trial is `scenes/cargo_trial.tscn`. On macOS, double-click **Test Cargo.command**. It starts you at Ceres Yard beside a contract computer, with an empty packing bay in the Blender Longhaul. The normal flight game and its save are unchanged; this trial starts fresh each launch.
+
+Press **F** at CONTRACTS, type **jobs**, then **accept 1** (small), **accept 2** (full), or choose a collection offer. **Esc** closes the computer. Goods spawn in COLLECTION on the left when you are at the pickup station. A collection job first sends you empty to its supplier, then brings the consignment back to its employer.
+
+**WASD/mouse** walk/look, **Shift** hurry, **F** lift/place/use, **R** turn the held case, **T** tip it, **Z** select automatic/rear/front rack depth, **P** show an optional valid packing order. Rack cell numbers match the plan. Green ghosts are valid, red ghosts explain the blockage. Cases need full support and a clear path into/out of the rack. Remove top/front cases before cases they obstruct. Four amber staging pads provide temporary storage; every pad must be empty before departure.
+
+After every case is racked, press **F** at the CARGO LOCK button near the forward end of the hold. The ship confirms departure clearance. The dock DEPARTURE computer accepts **depart** to skip the flight for this trial, charge the quoted fuel, advance the economy, and arrive at the next contract stop. At the destination, release the cargo locks, unload every case onto a separate marked DELIVERY position, then press **F** at the DELIVERY completion computer. Payment happens once; delivered cases are removed.
+
+The 15-station trial economy produces/consumes commodities and performs coarse background trades. Offers derive from actual surplus and demand, rank profitable matches, reserve goods and destination capacity on acceptance, and fix the fee. Fees include both legs of collection jobs, fuel, estimated journey time, handling, upkeep and profit. A fuel advance finances the planned route. No trading, deadlines, trolley, or cargo purchase is required. Trial travel costs are fixed estimates, not yet quotes from the live flight planner.
+
+Packing uses two 2×3×4-cell racks (0.45 m cells): small jobs fill one rack with 4–6 cases; full jobs fill both with 8–12. Manifests are generated from valid, supported, accessible solutions before the cases are shuffled. The new loop remains separate from the normal flight game's older single-case freight system until playtesting is complete. Other ship systems are scenery in this focused trial.
+
+Validation: 39 packing assertions across 600 generated manifests, 446 economy assertions, and 74 physical/controller integration assertions. Run `cargo_trial_packing_test.gd` and `cargo_trial_economy_test.gd` using Godot `--headless --script`; run the trial with `--headless --fixed-fps 60 -- --cargo-trial-test` for end-to-end checks. Tests verify the normal flight save remains byte-for-byte unchanged.
+
+---
+
 ## Current playable build: Longhaul flight
 
 The default scene is now the detailed Longhaul with physical cockpit command-line terminals, manual station flight, automatic interstation travel, printed checklists and route sheets, shipboard life, and optional docking assistance. On macOS, double-click `Fly Longhaul.command` (Godot installed in Applications).
