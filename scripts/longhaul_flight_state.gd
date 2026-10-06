@@ -1,18 +1,19 @@
 extends RefCounted
 ## Flight in a compressed local system. Metres, seconds, kg; no velocity damping.
 ## Stations follow circular Kepler orbits; the ship integrates central gravity.
-const PLANET := Vector3(0, 0, 500000)
-const MU := 80000000000.0
+const System = preload("res://scripts/longhaul_system.gd")
+const PLANET := System.PLANET
+const MU := System.MU
 const EXHAUST := 30000.0
 const DRY_MASS := 18000.0
 const CAPACITY := 3000.0
 const RESERVE := 200.0
 const WARNING_TIME := 90.0
+const DEPARTURE_ALLOWANCE := 145.0
+const ARRIVAL_ALLOWANCE := 40.0
 const BERTH_FORWARD := Vector3.BACK # The pad entrance is on -Z; arrive nose-first toward +Z.
-const IDS := ["ceres", "tharsis", "kepler", "helios"]
-const NAMES := ["Ceres Yard", "Tharsis Ring", "Kepler Depot", "Helios Anchorage"]
-const ORIGINS := [Vector3(0,0,0), Vector3(60000,0,-80000), Vector3(-140000,15000,-260000), Vector3(360000,-15000,-520000)]
-const TIMES := [240.0, 240.0, 620.0, 1050.0]
+const IDS := System.IDS
+const NAMES := System.NAMES
 var elapsed := 0.0
 var ship_position := Vector3.ZERO
 var velocity := Vector3.ZERO
@@ -82,19 +83,14 @@ func _init() -> void:
 	velocity = station_velocity(0, 0)
 
 func station_position(index: int, when: float) -> Vector3:
-	var radius: Vector3 = ORIGINS[index] - PLANET
-	var axis := Vector3.UP
-	if index >= 2: axis = Vector3(0.02,1,0.01).normalized()
-	return PLANET + radius.rotated(axis, sqrt(MU / pow(radius.length(), 3)) * when)
+	return System.station_position(index,when)
 
 func station_velocity(index: int, when: float) -> Vector3:
-	var axis:=Vector3.UP if index<2 else Vector3(0.02,1,0.01).normalized()
-	var radius: Vector3=ORIGINS[index]-PLANET
-	return axis.cross(station_position(index,when)-PLANET)*sqrt(MU/pow(radius.length(),3))
+	return System.station_velocity(index,when)
 
 func gravity(at: Vector3) -> Vector3:
 	var offset := PLANET - at
-	return offset.normalized() * MU / maxf(offset.length_squared(), 10000000000.0)
+	return offset.normalized() * MU / maxf(offset.length_squared(), System.PLANET_RADIUS*System.PLANET_RADIUS)
 
 func propagate(at: Vector3, speed: Vector3, duration: float) -> Array[Vector3]:
 	# Velocity Verlet also used for live flight; bounded steps during time acceleration.
@@ -125,38 +121,150 @@ func efficiency() -> float:
 func max_acceleration() -> float:
 	return float(int(engines[0])+int(engines[1]))/2.0 * flow * EXHAUST * efficiency() * clampf(coolant/0.82,0.25,1) / (DRY_MASS+cargo_mass+fuel)
 
+func _smooth_leg(leg: Dictionary, when: float) -> Dictionary:
+	var duration: float=leg.duration
+	var u:=clampf((when-float(leg.start))/duration,0,1)
+	var u2:=u*u
+	var u3:=u2*u
+	var u4:=u3*u
+	var u5:=u4*u
+	var s:=10*u3-15*u4+6*u5
+	var sd:=30*u2-60*u3+30*u4
+	var sdd:=60*u-180*u2+120*u3
+	var h0:=u-6*u3+8*u4-3*u5
+	var h1:=-4*u3+7*u4-3*u5
+	var h0d:=1-18*u2+32*u3-15*u4
+	var h1d:=-12*u2+28*u3-15*u4
+	var h0dd:=-36*u+96*u2-60*u3
+	var h1dd:=-24*u+84*u2-60*u3
+	var span: Vector3=leg.to-leg.from
+	var result: Dictionary={"position":leg.from+span*s+leg.v0*duration*h0+leg.v1*duration*h1,"velocity":span*sd/duration+leg.v0*h0d+leg.v1*h1d,"acceleration":span*sdd/(duration*duration)+(leg.v0*h0dd+leg.v1*h1dd)/duration}
+	var frame: int=leg.get("frame",-1)
+	if frame>=0:
+		var parent:=System.moon_position(frame,when)
+		result.position+=parent
+		result.velocity+=System.moon_velocity(frame,when)
+		result.acceleration+=gravity(parent)
+	return result
+
+func route_sample(when: float) -> Dictionary:
+	var legs: Array=plan.get("legs",[])
+	if legs.is_empty(): return {"position":ship_position,"velocity":velocity,"acceleration":Vector3.ZERO}
+	for leg in legs:
+		if when<=float(leg.start)+float(leg.duration): return _smooth_leg(leg,when)
+	return _smooth_leg(legs.back(),when)
+
+func _make_legs(points: Array, start: float, duration: float, frame: int=-1) -> Array:
+	var weights: Array[float]=[]
+	var total:=0.0
+	for i in points.size()-1:
+		var weight:=sqrt(maxf(1,points[i].distance_to(points[i+1])))
+		weights.append(weight)
+		total+=weight
+	var legs: Array=[]
+	var velocities: Array[Vector3]=[velocity-(System.moon_velocity(frame,start) if frame>=0 else Vector3.ZERO)]
+	for i in range(1,points.size()-1):
+		var previous: Vector3=points[i]-points[i-1]
+		var next: Vector3=points[i+1]-points[i]
+		var corner_speed:=minf(previous.length()/(duration*weights[i-1]/total),next.length()/(duration*weights[i]/total))*0.8
+		velocities.append((previous.normalized()+next.normalized()).normalized()*corner_speed)
+	velocities.append(station_velocity(destination,start+duration)-(System.moon_velocity(frame,start+duration) if frame>=0 else Vector3.ZERO))
+	var clock:=start
+	for i in weights.size():
+		var leg_duration:=duration*weights[i]/total
+		legs.append({"from":points[i],"to":points[i+1],"start":clock,"duration":leg_duration,"v0":velocities[i],"v1":velocities[i+1],"frame":frame})
+		clock+=leg_duration
+	return legs
+
+func _route_obstacles(when: float) -> Array:
+	# Rings use their circumscribing sphere as a conservative route exclusion zone.
+	var obstacles: Array=[{"position":PLANET,"radius":System.RING_OUTER+1200.0,"name":"Aurel rings"}]
+	for i in System.MOONS.size():
+		var moon: Dictionary=System.MOONS[i]
+		obstacles.append({"position":System.moon_position(i,when),"radius":float(moon.body_radius_km)/System.REAL_KM_PER_UNIT+650.0,"name":moon.name})
+	return obstacles
+
+func _first_route_obstruction(legs: Array) -> Dictionary:
+	for i in legs.size():
+		var leg: Dictionary=legs[i]
+		var samples:=maxi(20,ceili(float(leg.duration)/2.0))
+		for sample in samples+1:
+			var when:=float(leg.start)+float(leg.duration)*sample/samples
+			var point: Vector3=_smooth_leg(leg,when).position
+			for obstacle in _route_obstacles(when):
+				if point.distance_to(obstacle.position)<float(obstacle.radius):
+					return {"leg":i,"obstacle":obstacle,"point":point,"when":when}
+	return {}
+
+func _flight_plan(style: String, duration: float) -> Dictionary:
+	var target:=station_position(destination,elapsed+duration)+hold_offset
+	# Launches near a moon use its moving frame for smooth clearance.
+	# This avoids detours chasing the parent moon during the initial burn.
+	var frame: int=System.STATIONS[dock_id].moon
+	if frame<0 or ship_position.distance_to(System.moon_position(frame,elapsed))>15000: frame=-1
+	var points: Array=[ship_position-(System.moon_position(frame,elapsed) if frame>=0 else Vector3.ZERO),target-(System.moon_position(frame,elapsed+duration) if frame>=0 else Vector3.ZERO)]
+	var legs:=_make_legs(points,elapsed,duration,frame)
+	var clear:=false
+	for attempt in 18:
+		var collision:=_first_route_obstruction(legs)
+		if collision.is_empty():
+			clear=true
+			break
+		var index: int=collision.leg
+		var obstacle: Dictionary=collision.obstacle
+		var segment: Vector3=points[index+1]-points[index]
+		var normal: Vector3=Vector3.UP-segment.normalized()*segment.normalized().dot(Vector3.UP)
+		if normal.length()<0.2: normal=Vector3.RIGHT-segment.normalized()*segment.normalized().dot(Vector3.RIGHT)
+		normal=normal.normalized()
+		# Each miss increases stand-off to account for an orbit moving during the detour.
+		var waypoint: Vector3=obstacle.position+normal*float(obstacle.radius)*(1.7+attempt*0.15)
+		if frame>=0: waypoint-=System.moon_position(frame,float(collision.when))
+		points.insert(index+1,waypoint)
+		legs=_make_legs(points,elapsed,duration,frame)
+	if not clear: return {}
+	var delta_v:=0.0
+	var peak:=0.0
+	for leg in legs:
+		var samples:=maxi(20,ceili(float(leg.duration)/2.0))
+		var dt:=float(leg.duration)/samples
+		for i in samples:
+			var sample:=_smooth_leg(leg,float(leg.start)+(i+0.5)*dt)
+			var required: Vector3=sample.acceleration-gravity(sample.position)
+			delta_v+=required.length()*dt
+			peak=maxf(peak,required.length())
+	var world_points: Array=[]
+	for leg in legs: world_points.append(_smooth_leg(leg,float(leg.start)).position)
+	world_points.append(_smooth_leg(legs.back(),elapsed+duration).position)
+	var mass:=DRY_MASS+cargo_mass+fuel
+	var estimate:=mass*(1-exp(-delta_v/(EXHAUST*clampf(coolant/0.82,0.25,1))))
+	return {"destination":destination,"style":style,"start":elapsed,"eta":elapsed+duration,"target":target,"velocity":velocity,"fuel":ceilf(estimate*1.16+DEPARTURE_ALLOWANCE+ARRIVAL_ALLOWANCE),"burn":flow,"reserve":RESERVE,"mixture":mixture,"mass":cargo_mass,"coolant":coolant,"coast":duration,"points":world_points,"legs":legs,"peak":peak}
+
 func plan_route(id: String, style := "direct") -> String:
-	var index := IDS.find(id)
-	if index < 0: return "Unknown destination. Type destinations."
+	var index:=System.station_index(id)
+	if index<0: return "Unknown destination. Type destinations."
 	if style not in ["direct","economy"]: return "Use plot <station> direct|economy."
-	if phase == "docked" and index == dock_id: return "Already docked there. Choose another station."
+	if phase=="docked" and index==dock_id: return "Already docked there. Choose another station."
 	if phase in ["coast","brake","approach"]: return "Use NAV recalc to replace an active transfer."
 	if destination!=index: approach_clearance=false
-	destination = index
-	nav_selected = false
-	route_serial += 1
-	nav_stage = -1
-	var leg_time: float = maxf(TIMES[index], TIMES[dock_id] if phase=="docked" else 150+ship_position.distance_to(station_position(index,elapsed))/650)
-	var duration: float = minf(1050,leg_time) * (1.23 if style=="economy" else 1.0)
-	# Budget acceleration, then a coast to the arrival braking waypoint.
-	var eta := elapsed + duration + 60.0
-	var target := station_position(index,eta)
-	var v := solve_velocity(ship_position,target,duration+60)
-	var arrival_v := propagate(ship_position,v,duration+60)[1]
-	var arrival_dv := (arrival_v-station_velocity(index,eta)).length()
-	var brake_distance := arrival_dv*arrival_dv/(2*maxf(planning_acceleration(),1.0)) + arrival_dv*12 + 1000
-	var approach_dir := (arrival_v-station_velocity(index,eta)).normalized()
-	target -= approach_dir * brake_distance
-	v = solve_velocity(ship_position,target,duration+60)
-	arrival_v = propagate(ship_position,v,duration+60)[1]
-	var dv := (v-velocity).length() + (arrival_v-station_velocity(index,eta)).length() + 70
-	var estimate := dv*(DRY_MASS+cargo_mass+fuel)/(EXHAUST*efficiency()*clampf(coolant/0.82,0.25,1))
-	plan = {"destination":index,"style":style,"eta":eta,"target":target,"velocity":v,"fuel":ceilf(estimate*1.12+30),"burn":flow,"reserve":RESERVE,"mixture":mixture,"mass":cargo_mass,"coolant":coolant,"coast":duration}
-	loaded = false
-	entered_coords = Vector3.INF
-	entered_burn = -1
-	entered_reserve = -1
-	notified = false
+	destination=index
+	nav_selected=false
+	route_serial+=1
+	nav_stage=-1
+	var distance:=ship_position.distance_to(station_position(index,elapsed))
+	var duration:=clampf(260.0+distance/650.0,260.0,1320.0)*(1.12 if style=="economy" else 1.0)
+	plan={}
+	for attempt in 10:
+		var candidate:=_flight_plan(style,duration)
+		if not candidate.is_empty() and candidate.peak<=planning_acceleration()*0.7 and candidate.fuel+RESERVE<=CAPACITY:
+			plan=candidate
+			break
+		duration=minf(1600,duration*1.16)
+	loaded=false
+	entered_coords=Vector3.INF
+	entered_burn=-1
+	entered_reserve=-1
+	notified=false
+	if plan.is_empty(): return "No safe transfer solution at this epoch. Choose another route or request station assistance."
 	return route_card()
 
 func coords_text() -> String:
@@ -422,7 +530,9 @@ func command(terminal: String, line: String) -> String:
 	if op=="status": return status(terminal)
 	if op=="checklist": return checklist()
 	if terminal in ["chart","nav"] and op in ["stations","destinations"]:
-		return station_directory()
+		return station_directory(int(words[1]) if words.size()==2 and words[1].is_valid_int() else 1)
+	if terminal in ["chart","nav"] and op=="station" and words.size()==2:
+		return station_details(words[1])
 	match terminal:
 		"chart":
 			if op=="print": return print_route()
@@ -475,20 +585,29 @@ func command(terminal: String, line: String) -> String:
 func valid_number(value: String) -> bool:
 	return value.is_valid_float() and is_finite(float(value)) and absf(float(value))<10000000
 
-func station_directory() -> String:
-	var rows: Array[String] = ["STATION DIRECTORY / ROUTE IDs"]
-	for i in IDS.size():
-		var here := " [HERE]" if phase=="docked" and i==dock_id else ""
-		rows.append("%s / %s%s" % [IDS[i].to_upper(),NAMES[i],here])
-	rows.append("Plan at CHART: plot <id> direct|economy")
+func station_directory(page: int=1) -> String:
+	if page<1 or page>3: return "Use stations 1, stations 2, or stations 3."
+	var ordered: Array=[]
+	for number in range((page-1)*5+1,page*5+1): ordered.append(System.station_index(str(number)))
+	var rows: Array[String]=["AUREL STATIONS / PAGE %d OF 3" % page]
+	for i in ordered:
+		var here: String=" *HERE" if phase=="docked" and i==dock_id else ""
+		rows.append("%02d %s / %s%s" % [System.STATIONS[i].number,IDS[i].to_upper(),System.region(i),here])
+	rows.append("stations 1|2|3 / station <id> for details")
+	rows.append("CHART: plot <id or number> direct|economy")
 	rows.append("Example: plot %s direct" % IDS[(dock_id+1)%IDS.size()])
-	rows.append("Then copy the route coordinates into NAV.")
 	return "\n".join(rows)
+
+func station_details(id: String) -> String:
+	var index:=System.station_index(id)
+	if index<0: return "Unknown station. Type stations 1, 2, or 3."
+	var station: Dictionary=System.STATIONS[index]
+	return "%02d / %s\nREGION: %s\n%s\nEXPORTS: %s\nIMPORTS: %s\n\nCHART: plot %s direct|economy\nAll stations have a berth, supplies and service." % [station.number,station.name,System.region(index),station.purpose,station.exports,station.imports,station.id]
 
 func command_reference(terminal: String) -> String:
 	var reference: String={
-		"chart":"stations | plot <station> direct|economy\nroute | print | map",
-		"nav":"coords <x> <y> <z>  (km)\nburn <kg/s> | reserve <kg> | load\nengage | manual | recalc | warp 1|5|20\napproach | auto dock | dock\nstations | status",
+		"chart":"stations 1|2|3 | station <id>\nplot <station> direct|economy\nroute | print | map",
+		"nav":"coords <x> <y> <z>  (km)\nburn <kg/s> | reserve <kg> | load\nengage | manual | recalc | warp 1|5|20\napproach | auto dock | dock\nstations 1|2|3 | station <id> | status",
 		"checklist":"status | print\nhatch close|open | ramp raise|lower\nPhysical cargo clamps must also be secured.",
 		"fuel":"status  (fuel and spare-fuel monitor)",
 		"engine":"port on|off\nstarboard on|off\nstatus  (live engine diagram)",
@@ -531,12 +650,22 @@ func snapshot() -> Dictionary:
 		for key in ["target","velocity"]:
 			var v: Vector3=plan[key]
 			result.plan[key]=[v.x,v.y,v.z]
-	result["flight_revision"]=4
+	result["flight_revision"]=5
+	result["system_revision"]=1
+	if not plan.is_empty():
+		result.plan["points"]=[]
+		for point in plan.get("points",[]): result.plan.points.append([point.x,point.y,point.z])
+		for leg in result.plan.get("legs",[]):
+			for key in ["from","to","v0","v1"]:
+				var point: Vector3=leg[key]
+				leg[key]=[point.x,point.y,point.z]
 	return result
 
 func restore(data: Dictionary) -> bool:
 	if data.get("version")!=1: return false
 	data=data.duplicate(true)
+	var migrate_system:=int(data.get("system_revision",0))<1
+	data["system_revision"]=1
 	for key in ["printed_route","entered_coords","route_serial","nav_stage"]:
 		if not data.has(key): data[key]={"printed_route":{},"entered_coords":null,"route_serial":0,"nav_stage":-1}[key]
 	var defaults := snapshot()
@@ -548,13 +677,13 @@ func restore(data: Dictionary) -> bool:
 		data.nav_selected=data.get("loaded",false)
 	# Previous builds treated hold / docking as NAV being off. They are engaged modes.
 	if data.arrival_hold or data.auto_docking: data.autopilot=true
-	data.flight_revision=4
+	data.flight_revision=5
 	for key in defaults:
 		if not data.has(key): return false
 	# Validate into a candidate before changing the live model.
 	if data.phase not in ["docked","departure","injection","coast","brake","approach"]: return false
 	if not valid_number(str(data.dock_id)) or not valid_number(str(data.destination)): return false
-	if data.dock_id!=int(data.dock_id) or data.destination!=int(data.destination) or int(data.dock_id) not in [0,1,2,3] or int(data.destination) not in [0,1,2,3]: return false
+	if data.dock_id!=int(data.dock_id) or data.destination!=int(data.destination) or int(data.dock_id)<0 or int(data.dock_id)>=IDS.size() or int(data.destination)<0 or int(data.destination)>=IDS.size(): return false
 	for key in defaults:
 		if defaults[key] is float or defaults[key] is int:
 			if not (data[key] is float or data[key] is int) or not is_finite(float(data[key])): return false
@@ -602,10 +731,25 @@ func restore(data: Dictionary) -> bool:
 		for key in ["destination","eta","fuel","burn","reserve","mixture","mass","coolant","coast"]:
 			if not (data.plan.get(key) is float or data.plan.get(key) is int) or not is_finite(float(data.plan[key])): return false
 		if data.plan.get("style") not in ["direct","economy"]: return false
+		if int(data.plan.destination)!=int(data.destination): return false
+		if not migrate_system:
+			if not data.plan.get("legs") is Array or data.plan.legs.is_empty() or data.plan.legs.size()>24: return false
+			if not data.plan.get("points") is Array or data.plan.points.size()!=data.plan.legs.size()+1: return false
+			for point in data.plan.points:
+				if not _valid_vector_array(point): return false
+			for leg in data.plan.legs:
+				if not leg is Dictionary: return false
+				for key in ["from","to","v0","v1"]:
+					if not _valid_vector_array(leg.get(key)): return false
+				for key in ["start","duration"]:
+					if not (leg.get(key) is float or leg.get(key) is int) or not is_finite(float(leg[key])): return false
+				if leg.duration<=0: return false
+				if not (leg.get("frame",-1) is int or leg.get("frame",-1) is float): return false
+				if int(leg.get("frame",-1))!=leg.get("frame",-1) or int(leg.get("frame",-1))< -1 or int(leg.get("frame",-1))>=System.MOONS.size(): return false
 	elif data.loaded or data.phase in ["coast","brake","approach"]: return false
 	if data.fuel<0 or data.fuel>CAPACITY or data.flow<3 or data.flow>8 or data.mixture<1.5 or data.mixture>3.5: return false
 	for key in defaults:
-		if key in ["version","flight_revision","trail","ship_position","velocity","angular_velocity","required_velocity","attitude","plan","entered_coords"]: continue
+		if key in ["version","flight_revision","system_revision","trail","ship_position","velocity","angular_velocity","required_velocity","attitude","plan","entered_coords"]: continue
 		set(key,data[key])
 	for key in ["ship_position","velocity","angular_velocity","required_velocity"]:
 		set(key,Vector3(data[key][0],data[key][1],data[key][2]))
@@ -614,6 +758,13 @@ func restore(data: Dictionary) -> bool:
 	plan=data.plan.duplicate(true)
 	if not plan.is_empty():
 		for key in ["target","velocity"]: plan[key]=Vector3(plan[key][0],plan[key][1],plan[key][2])
+		for i in plan.get("points",[]).size():
+			var point: Array=plan.points[i]
+			plan.points[i]=Vector3(point[0],point[1],point[2])
+		for leg in plan.get("legs",[]):
+			for key in ["from","to","v0","v1"]:
+				var point: Array=leg[key]
+				leg[key]=Vector3(point[0],point[1],point[2])
 	engine_on=engines[0] or engines[1]
 	mixture=2.5
 	mixture_confirmed=true
@@ -625,8 +776,30 @@ func restore(data: Dictionary) -> bool:
 	matched_for=0
 	nav_stage=-1
 	entered_coords=Vector3(data.entered_coords[0],data.entered_coords[1],data.entered_coords[2]) if data.entered_coords!=null else (plan.get("target",Vector3.INF) if loaded else Vector3.INF)
+	if migrate_system:
+		# Geometry changed: a tug transfers the existing ship to its last known home berth.
+		# Inventory, supplies, needs, papers, upgrades and completed journeys are retained.
+		release_controls()
+		phase="docked"
+		attitude=Basis.looking_at(BERTH_FORWARD)
+		ship_position=station_position(dock_id,elapsed)
+		velocity=station_velocity(dock_id,elapsed)
+		angular_velocity=Vector3.ZERO
+		plan={}
+		loaded=false
+		nav_selected=false
+		entered_coords=Vector3.INF
+		entered_burn=-1
+		entered_reserve=-1
+		clearance=""
+		clearance_confirmed=false
+		approach_clearance=false
+		trail.clear()
+		printed_route={}
+		alert("Aurel chart update installed. Station tug has moored Longhaul at %s. Your supplies and progress are preserved; plot a fresh route." % NAMES[dock_id])
+		return true
 	# Older saves used a live departure epoch. Refresh once when migrating at berth.
-	if phase=="docked" and not plan.is_empty() and plan.eta-elapsed<plan.coast+59:
+	if phase=="docked" and not plan.is_empty() and plan.eta-elapsed<plan.coast-0.1:
 		plan_route(IDS[destination],plan.style)
 	return true
 
@@ -692,10 +865,18 @@ func engage_navigation() -> String:
 		return warning
 	# Rebase the planned intercept to departure time. Coordinates are still entered manually;
 	# station motion and delayed launches are handled by the navigation computer.
-	var old_eta: float=plan.eta
-	plan.eta=elapsed+plan.coast+60
-	plan.target+=station_position(destination,plan.eta)-station_position(destination,old_eta)
-	required_velocity=solve_velocity(ship_position,plan.target,plan.eta-elapsed)
+	var rebased: Dictionary={}
+	var duration: float=plan.coast
+	for attempt in 12:
+		var candidate:=_flight_plan(str(plan.style),duration)
+		# The departure allowance has already served its purpose outside the berth.
+		if not candidate.is_empty() and candidate.peak<=planning_acceleration()*0.7 and candidate.fuel-DEPARTURE_ALLOWANCE+RESERVE<=fuel:
+			rebased=candidate
+			break
+		duration=minf(1600,duration*1.12)
+	if rebased.is_empty(): return "The safe route now needs more fuel. Return to the station for fuel, or use COMMS rescue. NAV has not engaged."
+	plan=rebased
+	required_velocity=velocity
 	plan.velocity=required_velocity
 	autopilot=true
 	auto_docking=false
@@ -762,12 +943,13 @@ func docking_target() -> Vector3:
 func automatic_thrust(dt: float) -> Vector3:
 	var dv:=Vector3.ZERO
 	var docking_direction:=BERTH_FORWARD
-	if autopilot and phase in ["injection","coast"]:
-		solver_timer-=dt
-		if solver_timer<=0:
-			required_velocity=solve_velocity(ship_position,plan.target,maxf(5,plan.eta-elapsed))
-			solver_timer=1.0
+	var transfer_acceleration:=Vector3.ZERO
+	var transferring:=autopilot and phase in ["injection","coast"]
+	if transferring:
+		var reference:=route_sample(elapsed)
+		required_velocity=reference.velocity
 		dv=required_velocity-velocity
+		transfer_acceleration=reference.acceleration-gravity(ship_position)+(reference.position-ship_position)*0.12+dv*0.7
 	else:
 		var target:=docking_target() if auto_docking else station_position(destination,elapsed)+hold_offset
 		var offset:=target-ship_position
@@ -787,7 +969,7 @@ func automatic_thrust(dt: float) -> Vector3:
 		attitude=attitude.slerp(Basis.looking_at(wanted_direction,up),minf(1,dt*0.9)).orthonormalized()
 	angular_velocity=Vector3.ZERO
 	# The six-axis thrusters apply real acceleration and use the same fuel model as manual flight.
-	var desired_acceleration:=dv/1.4
+	var desired_acceleration: Vector3=transfer_acceleration if transferring else dv/1.4
 	if arrival_hold or auto_docking or phase=="brake":
 		desired_acceleration+=gravity(station_position(destination,elapsed))-gravity(ship_position)
 	return (attitude.inverse()*desired_acceleration/maxf(max_acceleration(),0.01)).limit_length(1)
@@ -847,3 +1029,9 @@ func discard_paper(id: String) -> String:
 	if current_paper().is_empty(): selected_paper=-1 if papers.is_empty() else int(papers.back().number)
 	if papers.is_empty(): paper_visible=false
 	return "Paper recycled. Loaded navigation remains in memory."
+
+func _valid_vector_array(value: Variant) -> bool:
+	if not value is Array or value.size()!=3: return false
+	for component in value:
+		if not (component is int or component is float) or not is_finite(float(component)): return false
+	return true

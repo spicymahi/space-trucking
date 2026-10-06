@@ -2,6 +2,8 @@ extends "res://scripts/longhaul_preview.gd"
 ## Approved interior, stable local frame, live inertial flight outside the windows.
 const FlightState = preload("res://scripts/longhaul_flight_state.gd")
 const Terminal = preload("res://scripts/longhaul_terminal.gd")
+const System = preload("res://scripts/longhaul_system.gd")
+const Freight = preload("res://scripts/longhaul_freight.gd")
 const SAVE_FILE := "user://longhaul_flight_v1.json"
 var flight := FlightState.new()
 var terminals: Array = []
@@ -20,7 +22,9 @@ var space_root: Node3D
 var station_nodes: Array[Node3D] = []
 var station_deck: StaticBody3D
 var stars: Node3D
-var planet: MeshInstance3D
+var planet: Node3D
+var system_visuals: Node3D
+var freight: Node3D
 var announcement: Label
 var status_repeaters: Array[Label3D] = []
 var notice_timer := 0.0
@@ -55,6 +59,9 @@ func _ready() -> void:
 	add_child(flight_sheet)
 	flight_sheet.build(self,terminals[0].panel)
 	_build_flight_space()
+	freight=Freight.new()
+	add_child(freight)
+	freight.build(self)
 	_register_life_actions()
 	announcement=Label.new()
 	announcement.add_theme_font_override("font",font)
@@ -128,34 +135,13 @@ func space_box(parent: Node3D, at: Vector3, size: Vector3, color: Color, glow:=f
 	return m
 
 func _build_flight_space() -> void:
-	space_root=Node3D.new()
-	add_child(space_root)
-	for i in 4:
-		var node:=Node3D.new()
-		space_root.add_child(node)
-		station_nodes.append(node)
-		# Open berth, aft service spine, and side machinery give a readable approach.
-		space_box(node,Vector3(0,-1.45,0),Vector3(42,0.5,52),Color("434c4b"))
-		space_box(node,Vector3(0,7,45),Vector3(52,16,20),Color("7c8175"))
-		for side in [-1,1]:
-			space_box(node,Vector3(side*20,3,8),Vector3(4,8,65),DARK)
-			space_box(node,Vector3(side*20,7.2,8),Vector3(3.8,0.25,60),ORANGE)
-			space_box(node,Vector3(side*55,9,45),Vector3(62,1,20),Color("293a47"))
-			for z in range(-22,26,4): space_box(node,Vector3(side*7,-1.15,z),Vector3(0.15,0.08,1.4),Color("a8d9c2"),true)
-		for x in range(-20,21,5): space_box(node,Vector3(x,10,34.9),Vector3(1.2,0.6,0.08),Color("f5d69a"),true)
-		for distance in [60,150,300]:
-			for side in [-1,1]:
-				space_box(node,Vector3(side*12,1,-distance),Vector3(0.6,0.6,2),Color("81daa4"),true)
-		var title:=Label3D.new()
-		title.font=font
-		title.font_size=80
-		title.pixel_size=0.02
-		title.text=FlightState.NAMES[i].to_upper()+"\nBERTH K-01"
-		title.position=Vector3(0,6,34.8)
-		title.rotation.y=PI
-		title.no_depth_test=false
-		title.modulate=Color("efc878")
-		node.add_child(title)
+	system_visuals=preload("res://scripts/longhaul_system_visuals.gd").new()
+	add_child(system_visuals)
+	system_visuals.build(self)
+	space_root=system_visuals
+	station_nodes=system_visuals.station_nodes
+	planet=system_visuals.planet
+	stars=system_visuals.stars
 	station_deck=StaticBody3D.new()
 	add_child(station_deck)
 	var collision:=CollisionShape3D.new()
@@ -164,22 +150,6 @@ func _build_flight_space() -> void:
 	collision.shape=box
 	collision.position=Vector3(0,-1.45,0)
 	station_deck.add_child(collision)
-	stars=Node3D.new()
-	add_child(stars)
-	var random:=RandomNumberGenerator.new()
-	random.seed=92811
-	for i in 280:
-		var dir:=Vector3(random.randfn(),random.randfn(),random.randfn()).normalized()
-		space_box(stars,dir*4200,Vector3.ONE*random.randf_range(1,3),Color("939eae"),true)
-	planet=MeshInstance3D.new()
-	var globe:=SphereMesh.new()
-	globe.radius=1
-	globe.height=2
-	globe.radial_segments=32
-	globe.rings=16
-	planet.mesh=globe
-	planet.material_override=_material(Color("54757c"))
-	add_child(planet)
 	for z in [-7.5,3.0,9.2]:
 		var repeater:=Label3D.new()
 		repeater.font=font
@@ -302,7 +272,9 @@ func sync_hardware() -> void:
 	flight.hatch_closed=not loading_module.hatch_open
 	flight.ramp_raised=ramp_up
 	flight.closures_busy=loading_module.hatch_moving or ramp_moving
-	flight.cargo_secured=cargo_module.locked and not cargo_module.carrying
+	var has_case: bool=not is_instance_valid(freight) or freight.case_available
+	flight.cargo_secured=not has_case or (cargo_module.locked and not cargo_module.carrying and cargo_module.crate_slot!=2)
+	flight.cargo_mass=560.0+(35.0 if has_case and (cargo_module.crate_slot!=2 or cargo_module.carrying) else 0.0)
 	flight.coolant=0.0 if engineering_module.isolated else (0.82 if engineering_module.repaired else 0.70)
 	loading_module.flight_locked=flight.phase!="docked"
 
@@ -335,6 +307,11 @@ func terminal_command(kind: String, value: String, source: Node=null) -> String:
 			return "Hatch moving." if loading_module.hatch_moving else (loading_module.notice if not loading_module.notice.is_empty() else "Hatch already set.")
 		if words[0]=="ramp" and words[1] in ["raise","lower"]: return set_ramp(words[1]=="raise")
 	if kind=="comms":
+		if words[0] in ["jobs","accept","contract","crew","deliver"]:
+			var reply: String=freight.command(words)
+			sync_hardware()
+			return reply
+		if words[0] in ["help","commands"]: return "jobs 1|2|3 | accept <station> | contract\ncrew load|unload (25 CR) | deliver\n"+flight.command(kind,value)
 		if words[0]=="save": return save_session()
 		if words[0]=="load": return load_session()
 		if words[0]=="service":
@@ -362,6 +339,9 @@ func terminal_command(kind: String, value: String, source: Node=null) -> String:
 		show_printer()
 	_update_flight_world()
 	return result
+
+func freight_manifest() -> String:
+	return freight.status() if is_instance_valid(freight) else "16 secured freight cases / service case 35 kg"
 
 func show_printer() -> void:
 	var terminal=active_terminal
@@ -487,17 +467,8 @@ func _physics_process(delta: float) -> void:
 
 func _update_flight_world() -> void:
 	if not is_instance_valid(space_root): return
-	var inverse:=flight.attitude.inverse()
-	stars.basis=inverse
-	for i in 4:
-		var offset: Vector3=flight.station_position(i,flight.elapsed)-flight.ship_position
-		var scale_factor:=minf(1,3500/maxf(1,offset.length()))
-		station_nodes[i].position=inverse*offset*scale_factor
-		station_nodes[i].basis=inverse.scaled(Vector3.ONE*scale_factor)
-	var planet_offset: Vector3=FlightState.PLANET-flight.ship_position
-	var planet_scale:=3500/planet_offset.length()
-	planet.position=inverse*planet_offset*planet_scale
-	planet.scale=Vector3.ONE*90000*planet_scale
+	system_visuals.update(flight)
+	if is_instance_valid(freight): freight.refresh()
 	station_deck.collision_layer=1 if flight.phase=="docked" else 0
 
 func _process(delta: float) -> void:
@@ -554,6 +525,7 @@ func save_session(path:=SAVE_FILE) -> String:
 	data["display_roles"]=[]
 	for terminal in terminals: data.display_roles.append(terminal.kind)
 	data["paper_pinned"]=paper_pinned
+	data["freight"]=freight.snapshot()
 	data["rooms"]={"crate_slot":cargo_module.crate_slot,"locked":cargo_module.locked,"repaired":engineering_module.repaired,"isolated":engineering_module.isolated,"cover":engineering_module.cover_open,"fuses":engineering_module.fuse_pattern.duplicate(),"bypass":engineering_module.bypass_ready}
 	var file:=FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file==null: return "Save failed. Previous session preserved."
@@ -570,7 +542,7 @@ func load_session(path:=SAVE_FILE) -> String:
 	var r: Dictionary=data.rooms
 	for k in ["crate_slot","locked","repaired","isolated","cover","fuses","bypass"]:
 		if not r.has(k): return "Save room state incomplete."
-	if not (r.crate_slot is float or r.crate_slot is int) or r.crate_slot!=int(r.crate_slot) or int(r.crate_slot) not in [0,1] or not r.fuses is Array or r.fuses.size()!=3: return "Save room state invalid."
+	if not (r.crate_slot is float or r.crate_slot is int) or r.crate_slot!=int(r.crate_slot) or int(r.crate_slot) not in [0,1,2] or not r.fuses is Array or r.fuses.size()!=3: return "Save room state invalid."
 	for k in ["locked","repaired","isolated","cover","bypass"]:
 		if not r[k] is bool: return "Save room state invalid."
 	for v in r.fuses:
@@ -582,7 +554,16 @@ func load_session(path:=SAVE_FILE) -> String:
 			if not role is String or role not in Terminal.VALID_ROLES: return "Save display role invalid."
 		roles=data.display_roles
 	if data.has("paper_pinned") and not data.paper_pinned is bool: return "Save paper layout invalid."
-	if not flight.restore(data): return "Save invalid; current session preserved."
+	var saved_freight=Freight.new()
+	if data.has("freight") and (not data.freight is Dictionary or not saved_freight.restore(data.freight)):
+		saved_freight.free()
+		return "Save freight data invalid; current session preserved."
+	if not flight.restore(data):
+		saved_freight.free()
+		return "Save invalid; current session preserved."
+	var migration_notice: String=flight.warning if data.get("system_revision",0)!=System.REVISION else ""
+	freight.restore(saved_freight.snapshot())
+	saved_freight.free()
 	for i in roles.size(): terminals[i].set_role(roles[i])
 	paper_pinned=data.get("paper_pinned",false)
 	ramp_up=flight.ramp_raised
@@ -605,7 +586,7 @@ func load_session(path:=SAVE_FILE) -> String:
 	if active_terminal: close_terminal()
 	_take_seat()
 	_update_flight_world()
-	flight.alert("Saved flight restored. CHECKLIST shows departure readiness; papers contains your saved sheets.")
+	flight.alert(migration_notice if not migration_notice.is_empty() else "Saved flight restored. COMMS: jobs / contract. CHECKLIST shows departure readiness.")
 	return flight.warning
 
 func _run_flight_tests() -> void:
@@ -616,6 +597,10 @@ func _run_flight_tests() -> void:
 	ok=(await paper_suite.run(self)) and ok
 	var display_suite=load("res://scripts/longhaul_display_test.gd").new()
 	ok=(await display_suite.run(self)) and ok
+	var map_suite=load("res://scripts/longhaul_system_map_test.gd").new()
+	ok=map_suite.run(self) and ok
+	var freight_suite=load("res://scripts/longhaul_freight_test.gd").new()
+	ok=(await freight_suite.run(self)) and ok
 
 	print("LONGHAUL FLIGHT ","PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
@@ -625,7 +610,20 @@ func _capture_flight() -> void:
 	var args:=OS.get_cmdline_user_args()
 	var index:=args.find("--flight-capture")
 	var mode:=args[index+1] if index+1<args.size() else "pilot"
-	if mode in ["paper","checklist-paper"]:
+	automatic_save_timer=INF
+	if mode=="system":
+		terminals[0].set_role("map")
+		open_terminal(terminals[0])
+		terminals[0].submit("map system")
+	elif mode=="aurel":
+		var pose: Dictionary=system_visuals.overview_pose()
+		flight.ship_position=pose.position
+		flight.attitude=Basis.looking_at((pose.look_at-pose.position).normalized())
+		player.position=Vector3(80,25,80)
+		camera.look_at(flight.attitude.inverse()*(pose.look_at-pose.position))
+		paused=true
+		_update_flight_world()
+	elif mode in ["paper","checklist-paper"]:
 		terminal_command("engine","port on")
 		terminal_command("engine","starboard on")
 		terminal_command("chart","plot tharsis direct")

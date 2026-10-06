@@ -204,7 +204,8 @@ func prompt(action: String) -> String:
 	match action:
 		"cargo_manifest":return "CHECK MANIFEST"
 		"cargo_clamps":return "RELEASE RECEIVING CLAMPS" if locked else "LOCK RECEIVING CLAMPS"
-		"cargo_crate":return "PICK UP SERVICE CASE" if not locked else "RELEASE RECEIVING CLAMPS FIRST"
+		"cargo_crate":return "PICK UP CARGO CASE" if not locked else "RELEASE RECEIVING CLAMPS FIRST"
+		"cargo_berth_2":return "PLACE CASE ON STATION PALLET" if carrying else "STATION FREIGHT / PICKUP AND DELIVERY"
 		"cargo_berth_0", "cargo_berth_1":
 			var index: int = int(action.right(1))
 			if carrying:return "PLACE CASE IN BERTH "+str(index+1)
@@ -213,10 +214,16 @@ func prompt(action: String) -> String:
 
 func use(action: String) -> void:
 	if action=="cargo_manifest":
+		if host.has_method("freight_manifest"):
+			explain(host.freight_manifest())
+			return
 		explain("MANIFEST: 16 secured freight cases. Service case: "+("being carried." if carrying else "berth "+str(crate_slot+1)+(" / clamped." if locked else " / unsecured.")))
 	elif action=="cargo_clamps":
 		if carrying:
 			explain("Place the service case in a receiving berth before clamping.")
+			return
+		if crate_slot==2:
+			explain("Bring the case aboard from the station pallet before clamping.")
 			return
 		locked = not locked
 		_update_manifest()
@@ -241,6 +248,7 @@ func _crate_intersects(transform: Transform3D, exclude: Array[RID] = []) -> bool
 
 func _pick_up() -> void:
 	if carrying:return
+	if not held_crate.visible: return
 	if locked:
 		explain("Release the receiving clamps at the forward cargo control first.")
 		return
@@ -264,7 +272,7 @@ func _pick_up() -> void:
 	last_safe_yaw = actor.rotation.y
 	last_safe_position = actor.global_position
 	_update_manifest()
-	explain("Carrying service case. Aim at a receiving berth and press F to place it.")
+	explain("Carrying cargo case. Aim at a hold berth or station pallet and press F to place it.")
 
 func _place(index: int) -> void:
 	var pos: Vector3 = slots[index]
@@ -291,7 +299,7 @@ func _place(index: int) -> void:
 	crate_body.collision_layer = 1
 	crate_body.collision_mask = 1
 	_update_manifest()
-	explain("Service case placed in berth "+str(index+1)+". Lock the receiving clamps before flight.")
+	explain("Cargo unloaded to station pallet. COMMS: deliver." if index==2 else "Service case placed in berth "+str(index+1)+". Lock the receiving clamps before flight.")
 
 func _physics_process(_delta: float) -> void:
 	validate_carry_rotation()
@@ -315,7 +323,7 @@ func validate_carry_rotation() -> void:
 
 func _update_manifest() -> void:
 	if is_instance_valid(manifest):
-		manifest.text = "LONGHAUL / FREIGHT REGISTER\n----------------------------\nRACKS     16 CASES / RESTRAINED\nHAND CASE "+("IN TRANSIT" if carrying else "BERTH 0"+str(crate_slot+1))+"\nCLAMPS    "+("LOCKED" if locked else "RELEASED")+"\n----------------------------\nHAND CASE / 0035 KG"
+		manifest.text = "LONGHAUL / FREIGHT REGISTER\n----------------------------\nRACKS     16 CASES / RESTRAINED\nHAND CASE "+("IN TRANSIT" if carrying else ("STATION PALLET" if crate_slot==2 else "BERTH 0"+str(crate_slot+1)))+"\nCLAMPS    "+("LOCKED" if locked else "RELEASED")+"\n----------------------------\nHAND CASE / 0035 KG"
 	if is_instance_valid(lock_label):lock_label.text = "CLAMP\n"+("LOCKED" if locked else "OPEN")
 	for lamp in lock_lamps:lamp.material_override = host._material(GREEN if locked else AMBER,true)
 	for child in get_children():

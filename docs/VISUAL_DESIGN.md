@@ -74,6 +74,14 @@ Printed sheets remain in a paper rack and can be read, selected or recycled. Fin
 
 Normal journeys target at most 30 real minutes aboard, with no delivery deadlines, punitive scheduling, inspections or violence. Current tests cover automatic transfers and optional docking within that budget. Gravity-assisted routes remain a desired later extension; the current simulation uses central gravity and moving station intercepts. See `FLIGHT.md` for the playable procedure and current boundaries.
 
+### Aurel exterior and station network
+
+The flight world now uses a shared catalogue for one ringed gas giant, eight moons and fifteen stations. Aurel has faceted cloud bands and layered rings; moons use distinct volcanic, rocky, icy and cloud-covered surfaces. Brume and Morrow have visible atmospheres. These are scenery and orbital anchors, with no surface landing gameplay.
+
+Stations use seven industrial silhouette families: freight platforms, habitats, shipyards, refineries, mining facilities, greenhouses, and research/relay structures. Their shared K-01 berth preserves the approved manual approach, nose-first docking and cargo ramp workflow. The first station implementation provides the exterior, berth, freight pallet, and terminal services; unique walkable concourses and shops remain future work.
+
+The cockpit map has a compressed, explicitly marked system overview so all fifteen stations remain legible on a physical CRT. Route and local views show the actual flight geometry. The exterior sky uses a separate astronomical rendering layer to preserve large body silhouettes without reducing the cockpit's depth precision. Bodies retain their apparent angular size as the ship moves.
+
 ## Launch and validation snapshot
 
 The repository root includes macOS launchers for the original hab study, the separate life slice, and the detailed Longhaul walkthrough. They expect Godot at `/Applications/Godot.app/Contents/MacOS/Godot`; other platforms can open the corresponding scenes directly in Godot. Generated ship concepts are archived in `docs/ship-concepts`.

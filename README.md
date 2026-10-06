@@ -6,6 +6,12 @@ Start at the **CHECKLIST** computer and type `print` for the command sheet. Look
 
 The upper screens show station radar, relative velocity along each ship axis, and destination distance. Use `display NAV` (or another screen name) at any cockpit terminal to choose what it displays. NAV stays engaged until you type `manual` or propulsion fails; sleep ends at least 90 seconds before the arrival braking point. For docking, `approach` assigns your berth automatically, then `auto dock` can guide the final approach when close and slow enough.
 
+The current world is **Aurel: one ringed gas giant, eight moving moons, and fifteen dockable stations**. Stations range from established inner ports to moon industries and remote research or relay facilities. Use `stations 1`, `stations 2`, or `stations 3` at CHART/NAV to browse, and `station <id>` to read a destination's role. `map system`, `map route`, and `map local` switch chart views. Normal journeys target roughly 5–30 minutes of real play; the system uses compressed distances and orbital time. See [the Aurel system guide](docs/AUREL_SYSTEM.md) for the map, station directory, and simulation boundaries.
+
+Freight now connects every station in the detailed Longhaul build. At COMMS, use `jobs`, then `accept <station ID or number>`. Collect the case from the station pallet beside the ramp, carry it aboard, and secure it before plotting the trip. At the destination, unload it to the pallet and type `deliver` for payment. `contract` shows the active job; `crew load` and `crew unload` each cost 25 credits. Jobs have no deadlines. This build supports one consignment at a time; the older prototype's commodity market remains separate.
+
+Older flight saves are moved safely to their last origin berth when the Aurel chart loads. Fuel, supplies and completed journeys are retained; plot a fresh route before departure.
+
 The original game remains available in `scenes/main.tscn`, the earlier economic prototype in `scenes/life_slice.tscn`, and the unchanged design study in `scenes/longhaul_preview.tscn`.
 
 ---

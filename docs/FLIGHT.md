@@ -1,6 +1,6 @@
 # Longhaul — cockpit flight and ship life
 
-The default scene is `scenes/longhaul_flight.tscn`. On macOS, double-click `Fly Longhaul.command`. The detailed ship now has printed flight paperwork, manual station flying, and automatic transfers between stations. The earlier economy prototype and independent room study retain their own launchers.
+The default scene is `scenes/longhaul_flight.tscn`. On macOS, double-click `Fly Longhaul.command`. The detailed ship now has printed flight paperwork, manual station flying, and automatic transfers around Aurel: a ringed gas giant, eight moons and fifteen stations. The earlier economy prototype and independent room study retain their own launchers.
 
 ## Cockpit layout
 
@@ -26,7 +26,7 @@ RADAR plots the selected station against a central aiming reticle, with signed h
 Docked launches open the CHECKLIST computer. Type `print` for a retained paper checklist. The live screen shows every departure requirement and marks completed items. Printing is optional for the interlock; it gives the player a physical reference rather than advancing a tutorial.
 
 1. **ENGINE:** `port on`, then `starboard on`. Both engines must be on. The ASCII diagram reflects each switch and each engine contributes to actual thrust. Fuel mixture is automatic and has no player command.
-2. **CHART:** `stations`, then `plot tharsis direct` (or another station ID, with `direct` or `economy`). Review fuel and travel estimate; `print` produces the route sheet.
+2. **CHART:** `stations 1`, `stations 2`, or `stations 3`, then `plot tharsis direct` (or another station ID, with `direct` or `economy`). Review fuel and travel estimate; `print` produces the route sheet.
 3. **NAV:** manually type the exact commands printed on that sheet: `coords <x> <y> <z>`, `burn <kg/s>`, `reserve <kg>`, then `load`. Coordinates are in kilometres, including minus signs. All values are validated. The destination meter becomes active when the route is loaded.
 4. **COMMS:** `request`, then `code <the code ATC returned>`. The code has no expiry.
 5. **CHECKLIST:** `hatch close`, wait for sealing, then `ramp raise` and wait for movement to finish. Secure cargo clamps in the hold. `status` shows live readiness, including machinery and sufficient fuel.
@@ -65,7 +65,7 @@ At a terminal, **Tab** pins or stows the selected sheet beside that screen. **Sh
 | Delete | Discard the visible sheet |
 | Escape | Leave terminal view; otherwise pause/resume |
 
-Manual flight preserves momentum and uses real fuel. NAV applies the same six-axis acceleration/fuel model; it does not teleport the ship between stations. The route solver tracks moving stations and accounts for gravity. Delayed departures are rebased when NAV engages, so slow preparation does not invalidate a trip.
+Manual flight preserves momentum and uses real fuel. NAV applies the same six-axis acceleration/fuel model; it does not teleport the ship between stations. The route planner tracks moving stations and builds smooth waypoint trajectories with future body-clearance checks. It treats the rings as a conservative exclusion sphere and routes around moving moons. The flight controller follows that route by firing the same thrusters used for manual flight, accounting for Aurel gravity and fuel. Delayed departures are rebased when NAV engages, with fuel and acceleration checked again; a longer safe route can be chosen automatically when station motion changes the geometry. A genuinely unaffordable transfer stays disengaged and explains the need for fuel or a tug.
 
 NAV remains engaged when the player sits, stands, opens a terminal, or presses flight controls. Type `manual` at any terminal to take over automatic transfer, arrival hold, or docking assistance; momentum is preserved. Propulsion faults such as lost engines, coolant, or fuel can still interrupt navigation. `recalc` computes a new transfer from the current physical state and re-engages NAV when fuel allows. Ordinary automatic corrections need no repeated coordinate typing. Initial destination selection still requires manual transcription.
 
@@ -77,7 +77,7 @@ NAV `warp 5` or `warp 20` speeds up automatic travel; `warp 1` restores normal t
 
 At arrival NAV brakes to a holding point about 600 m outside the berth and matches the moving station. The ship maintains that position until the player types `manual` or requests docking assistance. There is no arrival deadline.
 
-Tested outbound trips, including assisted berth capture, take approximately 8–9 minutes to Tharsis, 14–17 to Kepler, and 22–26 to Helios at normal speed with degraded-but-operational coolant. Deliberate manual delays can extend a trip. Sleeping and accelerated time shorten the real wait.
+The fifteen-station network targets roughly 5–8 minutes for local journeys, 10–15 for regional routes, and 20–30 for long crossings. A full initial-epoch test of all 210 directed station pairs, including manual departure and assisted capture, observed 5 minutes 49 seconds to 26 minutes 52 seconds at normal time. A second full economy-route run at orbital epoch 60,000 seconds observed 6 minutes 17 seconds to 27 minutes 30 seconds. Both runs used only the plotted trip fuel plus the 200 kg reserve and retained the reserve after docking. Orbital positions and ship condition change individual estimates; the plotted sheet is the relevant guide. Deliberate manual delays extend a trip. Sleep and accelerated time shorten the real wait.
 
 ## Approach, docking, recovery and saves
 
@@ -85,16 +85,24 @@ At COMMS or NAV, `approach` grants arrival clearance and automatically assigns b
 
 Optional `autodock`, `auto dock`, and `auto-dock` are equivalent commands. They require `approach` clearance, range under 1 km, relative speed under 15 m/s, both engines, coolant, and maneuver fuel. Assistance turns to line up before advancing, flies into the open end of the pad nose-first, and keeps that heading when the berth captures the ship. If assistance starts beside or behind the pad, it first moves to the entrance; a rear approach clears the station spine overhead. It stays engaged until capture, a propulsion fault, or an explicit `manual` command. The station radar and velocity screens provide alignment and drift information for either approach method.
 
-After docking, use CHECKLIST `ramp lower`, then `hatch open` to walk onto the berth. Both engines can be switched off independently at ENGINE. COMMS `refuel`, `service`, and `rescue` remain nonpunitive prototype services; the economy is still separate.
+After docking, use CHECKLIST `ramp lower`, then `hatch open` to walk onto the berth. Both engines can be switched off independently at ENGINE. COMMS `refuel`, `service`, and `rescue` remain nonpunitive prototype services. The Aurel delivery integration adds station contracts and optional paid cargo handlers; see [AUREL_SYSTEM.md](AUREL_SYSTEM.md).
 
-The game autosaves once a minute when moving hardware and carried cargo permit it. COMMS `save` and `load` provide manual control. Saves include route, actual position/velocity, automatic navigation/hold state, engines, screen assignments, papers, trail, needs, fuel, cargo, and repairs. Loads resume at normal time and awake. Docking approach stages and the parked orientation also survive save/load. Earlier flight saves migrate without resetting the journey; NAV can take over an existing manual transfer after station clearance.
+The game autosaves once a minute when moving hardware and carried cargo permit it. COMMS `save` and `load` provide manual control. Saves include route, actual position/velocity, automatic navigation/hold state, engines, screen assignments, papers, trail, needs, fuel, cargo, and repairs. Loads resume at normal time and awake. Docking approach stages and the parked orientation also survive save/load. Flight saves from before the Aurel geography update are safely moored at their last known origin station. Fuel, needs, supplies, cargo/room state and completed-trip totals are retained. Their old route is cleared and an explicit chart-update message asks for fresh plotting; old paper remains a historical snapshot. Saves made inside Aurel retain their actual route and position, including the smooth trajectory legs.
 
 ## Simulation boundaries and validation
 
-The compressed system uses central gravity, moving Keplerian stations, numerical intercept solving, and six-axis thrust. Multiple moving gravitational bodies and gravity-assist flybys remain future work. The fictional ship clock advances one hour per normal real minute. Station exteriors remain functional prototypes. Contracts, payments, paid cargo handlers, and shops remain in the separate life slice.
+The compressed system uses Aurel central gravity, analytic moon and station ephemerides, smooth obstacle-avoiding transfer plans, and six-axis thrust. Moon gravity acting on the ship, N-body interactions, gravity-assist optimization, landable surfaces and atmospheric flight remain future work. The fictional ship clock advances one hour per normal real minute. Orbital catalogue distances are separated from the compressed navigation grid and metre-scale docking; see [AUREL_SYSTEM.md](AUREL_SYSTEM.md) for the conversion and boundaries. Station exteriors have distinct authored industrial forms around a common usable berth.
 
-The updated suite passes 133 flight/ship checks, 53 paper/control checks, and 18 display checks. `--flight-test` covers full journeys to every station in both route modes, direct return trips, fuel/time budgets, manual momentum and nose-first docking, approach alignment and side/rear entry, docking save compatibility, engine loss, clearance and hardware gates, automatic arrival hold, early sleep wakeup, explicit manual takeover/recalculation, JSON save migration, printed commands, paper disposal, physical terminal placement, page/viewport bounds, walking and life interactions. Cockpit checks cover station radar, relative velocity, screen reassignment, and paper hotkeys. Forward+ captures support visual review of the actual cockpit screens and printer.
+The updated suite passes 133 flight/ship checks, 53 paper/control checks, and 18 display checks. `--flight-test` covers the legacy first-four station journeys in both route modes, direct return trips, fuel/time budgets, manual momentum and nose-first docking, approach alignment and side/rear entry, docking save compatibility, engine loss, clearance and hardware gates, automatic arrival hold, early sleep wakeup, explicit manual takeover/recalculation, JSON save migration, printed commands, paper disposal, physical terminal placement, page/viewport bounds, walking and life interactions. Cockpit checks cover station radar, relative velocity, screen reassignment, and paper hotkeys. Forward+ captures support visual review of the actual cockpit screens and printer.
+
+The same run additionally passes 11 system-map checks and 51 freight checks, bringing the integrated total to **266 passing checks**. Freight coverage exercises all station bookings, manual pickup and ramp traversal, clamp operation, destination unloading and payment, crew fees, and save/load.
 
 ```sh
 /Applications/Godot.app/Contents/MacOS/Godot --headless --fixed-fps 60 --path . --log-file /tmp/longhaul-flight-test.log res://scenes/longhaul_flight.tscn -- --flight-test
+```
+
+The expanded flight validation passes 1,931 assertions per all-pairs run (3,862 across the final direct/economy orbital configurations). The separate `longhaul_system_test.gd` covers the expanded catalogue: all directed station pairs, planned and actual body clearances, route fuel budgets, physical arrival/docking, paginated discovery, numeric destination selection, and old-world save migration. Pass `--all-pairs` for all 210 routes, `--plans-only` for catalogue planning checks, `--epoch=<seconds>` to test a later orbital configuration, `--economy` for slower routes, and `--budget-tank` to depart with only the quoted fuel plus reserve.
+
+```sh
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path . --log-file /tmp/aurel-system-test.log --script res://scripts/longhaul_system_test.gd -- --all-pairs
 ```

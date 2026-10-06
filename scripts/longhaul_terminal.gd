@@ -110,8 +110,12 @@ func submit(value: String) -> void:
 	history_index=history.size()
 	show_help=false
 	var command:=value.strip_edges().to_lower()
-	show_map=kind=="chart" and command=="map"
-	if show_map:
+	var words:=command.split(" ",false)
+	var map_command: bool=kind in ["chart","map"] and words[0]=="map"
+	show_map=false
+	if map_command and words.size()<=2 and (words.size()==1 or words[1] in ["auto","system","route","local"]):
+		chart_map.set_mode(words[1] if words.size()==2 else "auto")
+		show_map=true
 		show_live=true
 		entry=""
 		refresh()
@@ -173,16 +177,18 @@ func refresh() -> void:
 		prompt.text="[F] "+kind.to_upper()+" COMPUTER"
 		footer.text="TAB paper / SHIFT+TAB next / P read"
 	if not live: return
+	if kind=="comms" and is_instance_valid(host.freight):
+		readout.text=state.status(kind)+"\n\nFREIGHT / %d CR\njobs 1|2|3 / contract / deliver" % host.freight.credits
 	if kind=="engine":
 		readout.text=state.engine_diagram()
 		readout.add_theme_font_size_override("font_size",30)
 	if kind=="checklist": readout.text=state.checklist()
-	if kind=="map":
+	if kind=="map" or (kind=="chart" and show_map):
 		chart_map.visible=true
 		chart_map.position=Vector2(24,100)
 		chart_map.size=Vector2(792,405)
 		readout.text=""
-		header.text="K-01 / MAP\nLIVE JOURNEY / "+state.phase.to_upper()
+		header.text="K-01 / %s / AUREL\nmap system|route|local|auto" % kind.to_upper()
 		chart_map.queue_redraw()
 	if kind=="distance":
 		header.text="K-01 / DISTANCE\nSTATION RANGE / NAV LINK"
@@ -196,14 +202,14 @@ func refresh() -> void:
 			telemetry_note.text="NO DESTINATION LOADED AT NAV"
 	if kind=="velocity": _show_velocity()
 	if kind=="radar": _show_radar()
-	if kind=="chart" and chart_map:
+	if kind=="chart" and chart_map and not show_map:
 		chart_map.visible=true
 		chart_map.position=Vector2(24,98)
 		chart_map.size=Vector2(770,275)
 		chart_map.queue_redraw()
 		readout.position=Vector2(24,387)
 		readout.size=Vector2(792,126)
-		readout.text="plot <station> direct|economy\n"+("COORDS "+state.coords_text()+"\nBURN %.2f kg/s   SPARE %.0f kg" % [state.plan.burn,state.plan.reserve] if not state.plan.is_empty() else "destinations: list stations\nhelp: command reference")
+		readout.text="plot <station> direct|economy\n"+("COORDS "+state.coords_text()+"\nBURN %.2f kg/s   SPARE %.0f kg" % [state.plan.burn,state.plan.reserve] if not state.plan.is_empty() else "stations 1|2|3 / station <id>\nmap system / 15 ports / 8 moons")
 
 func _show_velocity() -> void:
 	var state=host.flight
