@@ -254,9 +254,10 @@ func _rack(side: int) -> void:
 func _overhead() -> void:
 	# Narrow eyebrow carries secondary status; the primary eye line stays below it.
 	block(Vector3(0,2.20,-13.00),Vector3(2.66,0.30,0.38),EDGE)
-	monitor(Vector3(-0.73,2.19,-12.83),Vector2(0.43,0.21),"radar",Vector3(14,0,0),IVORY)
-	monitor(Vector3(0,2.19,-12.83),Vector2(0.50,0.21),"power",Vector3(14,0,0),IVORY)
-	monitor(Vector3(0.73,2.19,-12.83),Vector2(0.43,0.21),"comms",Vector3(14,0,0),IVORY)
+	# The outer CRTs wrap toward the seated eye, with visible arms back to the beam.
+	_overhead_wing(-1,"radar")
+	monitor(Vector3(0,2.09,-12.83),Vector2(0.50,0.21),"power",Vector3(14,0,0),IVORY)
+	_overhead_wing(1,"comms")
 	for x in [-1.18,1.05]: switches(self,Vector3(x,2.14,-12.80),1,1)
 	# Recessed lighting runs where wall modules meet the service ceiling.
 	for x in [-1.40,1.40]:
@@ -275,6 +276,17 @@ func _overhead() -> void:
 		block(Vector3(x,2.28,-11.65),Vector3(0.075,0.09,3.63),BLACK)
 		for z in [-10.2,-11.0,-11.8,-12.6,-13.15]:
 			block(Vector3(x,2.21,z),Vector3(0.105,0.05,0.07),EDGE)
+
+func _overhead_wing(side: int, content: String) -> void:
+	var panel:=monitor(Vector3(side*0.64,2.035,-12.69),Vector2(0.49,0.27),content,Vector3(18,-side*29,0),IVORY)
+	var anchor:=Vector3(side*0.64,2.23,-12.99)
+	var hinge:=panel.position+panel.basis*Vector3(0,0,-0.17)
+	var arm:=block((anchor+hinge)*0.5,Vector3(0.10,0.10,anchor.distance_to(hinge)),EDGE)
+	arm.basis=Basis.looking_at(hinge-anchor)
+	block(anchor,Vector3(0.24,0.19,0.06),BLACK)
+	block(Vector3(0,0,-0.15),Vector3(0.21,0.18,0.09),BLACK,false,panel)
+	for x in [-0.13,0.13]:
+		block(Vector3(x,0,-0.16),Vector3(0.05,0.11,0.10),GOLD,false,panel)
 
 func _chair() -> void:
 	block(Vector3(0,0.11,-10.22),Vector3(0.73,0.2,0.85),BLACK,true)

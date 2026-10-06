@@ -151,6 +151,7 @@ func handle_key(event: InputEventKey) -> void:
 
 func refresh() -> void:
 	var state=host.flight
+	header.add_theme_font_size_override("font_size",29)
 	header.text="K-01 / %s\n%s  |  %.0f kg  |  T+%05.1f h" % [kind.to_upper(),state.phase.to_upper(),state.fuel,state.elapsed/60]
 	readout.position=Vector2(24,103)
 	readout.size=Vector2(792,408)
@@ -188,7 +189,7 @@ func refresh() -> void:
 		readout.text=""
 		if state.nav_selected:
 			var distance: float=state.station_range()
-			readout.add_theme_font_size_override("font_size",85)
+			readout.add_theme_font_size_override("font_size",112)
 			readout.text="%s\n%s" % [state.IDS[state.destination].to_upper(),"%.1f km" % (distance/1000) if distance>=1000 else "%.0f m" % distance]
 		else:
 			telemetry_note.visible=true
@@ -246,26 +247,30 @@ func _show_radar() -> void:
 	var depth:=maxf(absf(offset.z),1)
 	var horizontal:=offset.x/depth
 	var vertical:=offset.y/depth
-	var col:=clampi(roundi(10+horizontal*9),1,19)
-	var row:=clampi(roundi(4-vertical*3),1,7)
+	# Large flight-watch reticle and essential numbers; F opens the full instrument.
+	var center_x:=10 if focused else 8
+	var center_y:=4 if focused else 3
+	var col:=clampi(roundi(center_x+horizontal*(center_x-1)),1,center_x*2-1)
+	var row:=clampi(roundi(center_y-vertical*(center_y-1)),1,center_y*2-1)
 	var outside: bool=not forward or absf(horizontal)>1 or absf(vertical)>1
 	var grid: Array[String]=[]
-	for y in 9:
+	for y in center_y*2+1:
 		var line:=""
-		for x in 21:
+		for x in center_x*2+1:
 			var mark:=" "
-			if y==0 or y==8: mark="+" if x==0 or x==20 else "-"
-			elif x==0 or x==20: mark="|"
-			elif y==4: mark="+" if x==10 else "-"
-			elif x==10: mark="|"
+			if y==0 or y==center_y*2: mark="+" if x==0 or x==center_x*2 else "-"
+			elif x==0 or x==center_x*2: mark="|"
+			elif y==center_y: mark="+" if x==center_x else "-"
+			elif x==center_x: mark="|"
 			if x==col and y==row: mark="!" if not forward else "O"
 			line+=mark
 		grid.append(line)
 	header.text="K-01 / RADAR\n%s / %s" % [state.IDS[reference].to_upper(),"TARGET BEHIND" if not forward else ("TARGET OFF SCREEN" if outside else "FORWARD VIEW +/-45 DEG")]
+	if not focused: header.add_theme_font_size_override("font_size",38)
 	readout.position=Vector2(24,116)
 	readout.size=Vector2(410,382)
 	readout.autowrap_mode=TextServer.AUTOWRAP_OFF
-	readout.add_theme_font_size_override("font_size",36)
+	readout.add_theme_font_size_override("font_size",36 if focused else 50)
 	readout.text="\n".join(grid)
 	var closing: float=velocity.dot(offset.normalized()) if distance>0.01 else 0.0
 	var nose: Vector3=-state.attitude.z
@@ -277,6 +282,9 @@ func _show_radar() -> void:
 	telemetry_note.size=Vector2(372,401)
 	telemetry_note.add_theme_font_size_override("font_size",29)
 	telemetry_note.text="RANGE %s\nX %s %s\nY %s %s\n%s %.1f m/s\nDRIFT X %+.1f m/s\nDRIFT Y %+.1f m/s\nHDG %03.0f / PITCH %+.0f\nBERTH HDG 180 / P 000\nBERTH %s\nCAPTURE <20m / <2m/s\n%s" % [distance_text(distance),axis_direction(offset.x,"RIGHT","LEFT"),distance_text(offset.x),axis_direction(offset.y,"UP","DOWN"),distance_text(offset.y),"CLOSING" if closing>=0 else "OPENING",absf(closing),velocity.x,velocity.y,heading,pitch,berth,"O TARGET / + YOUR NOSE" if forward else "! BEHIND / TURN TO FACE"]
+	if not focused:
+		telemetry_note.add_theme_font_size_override("font_size",48)
+		telemetry_note.text="RANGE %s\nX %s %s\nY %s %s\n%s %.1f m/s\nHDG %03.0f P %+.0f\nBERTH 180 / P 0" % [distance_text(distance),axis_direction(offset.x,"RIGHT","LEFT"),distance_text(offset.x),axis_direction(offset.y,"UP","DOWN"),distance_text(offset.y),"CLOSING" if closing>=0 else "OPENING",absf(closing),heading,pitch]
 
 func _process(delta: float) -> void:
 	refresh_timer-=delta

@@ -47,8 +47,6 @@ func _ready() -> void:
 			break
 	var roles={"nav":"chart","dock":"nav","fuel":"checklist","drive":"engine","comms":"comms","radar":"radar","power":"velocity"}
 	for panel in cockpit_module.monitor_faces:
-		# Keep the status glass below the overhead cable supports.
-		if panel.position.y>2: panel.position.y-=0.10
 		var terminal:=Terminal.new()
 		add_child(terminal)
 		terminal.build(self,panel,"distance" if panel.get_meta("content")=="comms" and panel.position.y>2 else roles.get(panel.get_meta("content"),"nav"))

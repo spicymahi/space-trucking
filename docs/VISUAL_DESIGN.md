@@ -15,9 +15,11 @@ The game's visual language is compact cassette futurism: practical hardware, enc
 
 ## Longhaul cockpit application
 
-The approved U-shaped console and seated display positions are the fixed reference. The cabin shell now fits around that console, approximately 3.1 m clear width and 2.38 m clear ceiling. The operating compartment runs from the rear entry bulkhead to the windshield; a short equipment-lined passage connects it to the hab.
+The approved U-shaped console and pilot seating position are the reference. The cabin shell now fits around that console, approximately 3.1 m clear width and 2.38 m clear ceiling. The operating compartment runs from the rear entry bulkhead to the windshield; a short equipment-lined passage connects it to the hab.
 
 The console connects to the side service plinths. Navigation, docking, and fuel remain in the forward view. Throttles, keypad, communications, and drive diagnostics sit along the console arms. Walls carry inertial-navigation electronics, air regulation, circuit protection, cartridges, and isolation controls. The rear bulkhead carries scrubber and backup-power service modules. Ceiling space carries power distribution, cable trays, ducting, service covers, and lights.
+
+The upper-left and upper-right CRTs sit closer to the pilot on visible bracket arms. Their larger screens angle inward and downward toward the seated eye, with the central windshield sightline preserved. Radar uses larger essential readings and a reticle while flying; focusing that terminal shows its detailed docking instrument. The station-distance reading is also enlarged.
 
 The narrowed exterior matches the smaller cabin. The walkable preview still uses illustrative equipment and display values; these modules are not yet connected to simulation systems.
 
