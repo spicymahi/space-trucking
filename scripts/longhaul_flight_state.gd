@@ -32,6 +32,9 @@ var ramp_raised := false
 var closures_busy := false
 var cargo_secured := true
 var plan: Dictionary = {}
+var printed_route: Dictionary = {}
+var route_serial := 0
+var nav_stage := -1
 var loaded := false
 var entered_coords := Vector3.INF
 var entered_burn := -1.0
@@ -113,6 +116,8 @@ func plan_route(id: String, style := "direct") -> String:
 	if phase == "docked" and index == dock_id: return "Already docked there. Choose another station."
 	if phase in ["coast","brake","approach"]: return "Use NAV recalc to replace an active transfer."
 	destination = index
+	route_serial += 1
+	nav_stage = -1
 	var leg_time: float = maxf(TIMES[index], TIMES[dock_id] if phase=="docked" else 150+ship_position.distance_to(station_position(index,elapsed))/650)
 	var duration: float = minf(1050,leg_time) * (1.23 if style=="economy" else 1.0)
 	# Leave room for the manually executed departure burn, then a coast.
@@ -143,7 +148,7 @@ func coords_text() -> String:
 
 func route_card() -> String:
 	if plan.is_empty(): return "No route. CHART: plot tharsis direct"
-	return "ROUTE %s / %s\nNAV: coords %s\nNAV: burn %.2f  |  reserve %.0f\nNAV: load\nFuel estimate %.0f kg + %.0f reserve\nCoast ends in ~%.0f min / %.1f hr ship\nAllow 3–7 min for manual arrival. Compressed distances." % [IDS[destination].to_upper(),plan.style,coords_text(),plan.burn,plan.reserve,plan.fuel,plan.reserve,(plan.eta-elapsed)/60,(plan.eta-elapsed)/60]
+	return "ROUTE %s / %s\nINTERCEPT %s km\nBURN %.2f kg/s  |  RESERVE %.0f kg\nFuel estimate %.0f kg + %.0f reserve\nCoast ~%.0f min real / %.1f hr ship\nNEXT: print (your paper flight sheet)\nThen go nav, and type plot.\nAllow 3–7 min for manual arrival." % [IDS[destination].to_upper(),plan.style,coords_text(),plan.burn,plan.reserve,plan.fuel,plan.reserve,(plan.eta-elapsed)/60,(plan.eta-elapsed)/60]
 
 func stale_plan() -> bool:
 	return not plan.is_empty() and (absf(plan.mixture-mixture)>0.01 or absf(plan.burn-flow)>0.01 or absf(plan.mass-cargo_mass)>0.1 or absf(plan.coolant-coolant)>0.01)
@@ -156,10 +161,10 @@ func load_route() -> String:
 	if absf(entered_burn-plan.burn)>0.01: return "Burn rate differs from CHART. Enter burn <kg/s>."
 	if absf(entered_reserve-plan.reserve)>0.1: return "Enter the reserve shown on CHART."
 	if fuel < plan.fuel+plan.reserve: return "Insufficient fuel including arrival and reserve. COMMS: refuel."
-	if plan.eta-elapsed < plan.coast*0.65: return "Departure slipped. Replot for a fresh intercept; no penalty."
 	loaded = true
 	required_velocity = plan.velocity
-	return "Route loaded. ENGINE checklist, then COMMS request."
+	nav_stage = -1
+	return "Route loaded.\n" + next_hint()
 
 func checklist() -> String:
 	return "DEPARTURE CHECKLIST\n[%s] ENGINE power on\n[%s] FUEL mixture 2.5 / flow %.2f\n[%s] CHART plotted / NAV loaded\n[%s] COMMS takeoff code confirmed\n[%s] ENGINE hatch close\n[%s] ENGINE ramp raise\n[%s] Cargo restrained / machinery ready" % [mark(engine_on),mark(mixture_confirmed and absf(mixture-2.5)<0.01),flow,mark(loaded and not stale_plan()),mark(clearance_confirmed),mark(hatch_closed and not closures_busy),mark(ramp_raised and not closures_busy),mark(cargo_secured and coolant>0)]
@@ -172,8 +177,7 @@ func can_depart() -> bool:
 
 func depart() -> String:
 	if phase != "docked": return "Already in flight."
-	if not can_depart(): return "Departure interlock. ENGINE: checklist"
-	if plan.eta-elapsed < plan.coast*0.65: return "Refresh CHART and NAV: intercept needs updating. No deadline."
+	if not can_depart(): return "Departure interlock: " + next_step().title + "\n" + help_text("comms")
 	phase = "departure"
 	warp = 1
 	alert("Dock released. Manual flight. Follow NAV burn guidance.")
@@ -232,6 +236,8 @@ func recalculate() -> String:
 	return result
 
 func tick(delta: float, thrust := Vector3.ZERO, rotation_input := Vector3.ZERO, stop_rotation := false) -> void:
+	# Docked preparation has no ticking launch window. Hardware still animates.
+	if phase=="docked": return
 	var accelerated := warp
 	var was_sleeping := sleeping
 	var dt := delta*accelerated
@@ -356,16 +362,28 @@ func command(terminal: String, line: String) -> String:
 	var words := line.strip_edges().to_lower().split(" ",false)
 	if words.is_empty(): return ""
 	var op := words[0]
-	if op=="help": return help_text(terminal)
+	if op in ["help","next"]:
+		return command_reference(terminal) if words.size()>1 and words[1]=="all" else help_text(terminal)
+	if op=="commands": return command_reference(terminal)
 	if op=="status": return status(terminal)
 	if op=="checklist": return checklist()
 	if terminal in ["chart","nav"] and op in ["stations","destinations"]:
 		return station_directory()
 	match terminal:
 		"chart":
-			if op=="plot" and words.size() in [2,3]: return plan_route(words[1],words[2] if words.size()==3 else "direct")
+			if op=="print": return print_route()
+			if op=="plot" and words.size() in [2,3]:
+				var previous_revision:=route_serial
+				var result := plan_route(words[1],words[2] if words.size()==3 else "direct")
+				return result + ("\nNext: print  (your paper route sheet)" if route_serial!=previous_revision else "")
 			if op=="route": return route_card()
 		"nav":
+			if op=="plot" and words.size()==1: return begin_nav_entry()
+			if op=="cancel":
+				nav_stage=-1
+				return "Entry paused. Type plot to continue, or help for the next step."
+			if nav_stage>=0 and (valid_number(op) or op=="confirm"):
+				return nav_entry(line)
 			if op=="coords" and words.size()==4:
 				for i in range(1,4):
 					if not valid_number(words[i]): return "Use three finite coordinates in km."
@@ -413,7 +431,11 @@ func command(terminal: String, line: String) -> String:
 				if phase!="docked": return "Refuel at a station; rescue is available."
 				fuel=CAPACITY
 				return "Station test supply: tanks filled to 3000 kg."
-	return "Unknown or incomplete command. Type help."
+	var destination_terminal: String={"power":"engine","mixture":"fuel","flow":"fuel","hatch":"engine","ramp":"engine","request":"comms","code":"comms","depart":"comms","print":"chart"}.get(op,"")
+	if op=="plot" and words.size()>1: destination_terminal="chart"
+	if not destination_terminal.is_empty() and destination_terminal!=terminal:
+		return "That command belongs at %s.\nType: go %s\nThen: %s" % [destination_terminal.to_upper(),destination_terminal,line]
+	return "Unknown or incomplete command. Type help for your next step, or commands for syntax."
 
 func valid_number(value: String) -> bool:
 	return value.is_valid_float() and is_finite(float(value)) and absf(float(value))<10000000
@@ -428,10 +450,10 @@ func station_directory() -> String:
 	rows.append("Then copy the route coordinates into NAV.")
 	return "\n".join(rows)
 
-func help_text(terminal: String) -> String:
+func command_reference(terminal: String) -> String:
 	match terminal:
-		"chart": return "stations | destinations  (list all stations)\nmap | plot <station> direct|economy\nroute\nCalculate here; copy coordinates and fuel to NAV."
-		"nav": return "stations | destinations  (list all stations)\ncoords <x> <y> <z>  (km)\nburn <kg/s> | reserve <kg> | load\nrecalc | warp 1|5|20\nstatus | checklist\nSteer with arrows/Q/E. W thrust, S reverse.\nA/D lateral; R/V vertical. Shift fine. X stops spin."
+		"chart": return "stations | destinations  (list all stations)\nmap | plot <station> direct|economy\nprint | route\nCalculate here; copy coordinates and fuel to NAV."
+		"nav": return "stations | destinations  (list all stations)\nplot  (guided entry from printed sheet)\ncoords <x> <y> <z>  (km)\nburn <kg/s> | reserve <kg> | load\nrecalc | warp 1|5|20\nstatus | checklist\nSteer with arrows/Q/E. W thrust, S reverse.\nA/D lateral; R/V vertical. Shift fine. X stops spin."
 		"fuel": return "mixture 2.5  (oxidizer : fuel)\nflow 6       (kg/s)\nstatus\nSet before plotting. Both affect fuel estimates."
 		"engine": return "power on|off\nhatch close|open\nramp raise|lower\nchecklist | status\nClose hatch and raise ramp before departure."
 		"comms": return "request | code <takeoff-code> | depart\napproach | dock\nrefuel | service | rescue\nsave | load\nATC never imposes a delivery deadline."
@@ -449,12 +471,14 @@ func status(terminal: String) -> String:
 
 func snapshot() -> Dictionary:
 	var result := {"version":1}
-	for key in ["elapsed","phase","dock_id","destination","fuel","cargo_mass","mixture_confirmed","mixture","flow","engine_on","coolant","hatch_closed","ramp_raised","cargo_secured","loaded","entered_burn","entered_reserve","clearance","clearance_confirmed","approach_clearance","notified","food","water","hygiene","rest","rations","drinks","completed_trips","misses","warning","session_message"]:
+	for key in ["route_serial","nav_stage","elapsed","phase","dock_id","destination","fuel","cargo_mass","mixture_confirmed","mixture","flow","engine_on","coolant","hatch_closed","ramp_raised","cargo_secured","loaded","entered_burn","entered_reserve","clearance","clearance_confirmed","approach_clearance","notified","food","water","hygiene","rest","rations","drinks","completed_trips","misses","warning","session_message"]:
 		result[key]=get(key)
 	for key in ["ship_position","velocity","angular_velocity","required_velocity"]:
 		var v: Vector3 = get(key)
 		result[key]=[v.x,v.y,v.z]
 	result["attitude"]=[attitude.x.x,attitude.x.y,attitude.x.z,attitude.y.x,attitude.y.y,attitude.y.z,attitude.z.x,attitude.z.y,attitude.z.z]
+	result["printed_route"]=printed_route.duplicate(true)
+	result["entered_coords"]=[entered_coords.x,entered_coords.y,entered_coords.z] if entered_coords.is_finite() else null
 	result["plan"]=plan.duplicate(true)
 	if not plan.is_empty():
 		for key in ["target","velocity"]:
@@ -464,6 +488,9 @@ func snapshot() -> Dictionary:
 
 func restore(data: Dictionary) -> bool:
 	if data.get("version")!=1: return false
+	data=data.duplicate(true)
+	for key in ["printed_route","entered_coords","route_serial","nav_stage"]:
+		if not data.has(key): data[key]={"printed_route":{},"entered_coords":null,"route_serial":0,"nav_stage":-1}[key]
 	var defaults := snapshot()
 	for key in defaults:
 		if not data.has(key): return false
@@ -482,6 +509,12 @@ func restore(data: Dictionary) -> bool:
 		if not data[key] is Array or data[key].size()!=(9 if key=="attitude" else 3): return false
 		for v in data[key]:
 			if not (v is float or v is int) or not is_finite(float(v)): return false
+	if not data.printed_route is Dictionary or not valid_paper(data.printed_route): return false
+	if int(data.nav_stage) not in [-1,0,1,2,3] or data.route_serial<0: return false
+	if data.entered_coords!=null:
+		if not data.entered_coords is Array or data.entered_coords.size()!=3: return false
+		for v in data.entered_coords:
+			if not (v is int or v is float) or not is_finite(float(v)): return false
 	if not data.plan is Dictionary: return false
 	if not data.plan.is_empty():
 		for key in ["target","velocity"]:
@@ -494,7 +527,7 @@ func restore(data: Dictionary) -> bool:
 	elif data.loaded or data.phase in ["coast","brake","approach"]: return false
 	if data.fuel<0 or data.fuel>CAPACITY or data.flow<3 or data.flow>8 or data.mixture<1.5 or data.mixture>3.5: return false
 	for key in defaults:
-		if key in ["version","ship_position","velocity","angular_velocity","required_velocity","attitude","plan"]: continue
+		if key in ["version","ship_position","velocity","angular_velocity","required_velocity","attitude","plan","entered_coords"]: continue
 		set(key,data[key])
 	for key in ["ship_position","velocity","angular_velocity","required_velocity"]:
 		set(key,Vector3(data[key][0],data[key][1],data[key][2]))
@@ -507,5 +540,117 @@ func restore(data: Dictionary) -> bool:
 	sleeping=false
 	solver_timer=0
 	matched_for=0
-	entered_coords=plan.get("target",Vector3.INF) if loaded else Vector3.INF
+	entered_coords=Vector3(data.entered_coords[0],data.entered_coords[1],data.entered_coords[2]) if data.entered_coords!=null else (plan.get("target",Vector3.INF) if loaded else Vector3.INF)
+	# Older saves used a live departure epoch. Refresh once when migrating at berth.
+	if phase=="docked" and not plan.is_empty() and plan.eta-elapsed<plan.coast+59:
+		plan_route(IDS[destination],plan.style)
 	return true
+
+func print_route() -> String:
+	if plan.is_empty(): return "No route to print. At CHART: stations, then plot <station> direct."
+	if stale_plan(): return "Ship setup changed. Replot at CHART before printing a fresh sheet."
+	printed_route={"revision":route_serial,"station":NAMES[destination],"id":IDS[destination],"style":str(plan.style),"coords":coords_text(),"burn":float(plan.burn),"reserve":float(plan.reserve),"fuel":float(plan.fuel),"coast":float(plan.coast)}
+	return "FLIGHT SHEET %03d PRINTED\nIt will appear beside the middle NAV screen.\nType: go nav\nThen: plot\nNAV will ask for each value on the paper." % route_serial
+
+func paper_current() -> bool:
+	return not printed_route.is_empty() and int(printed_route.revision)==route_serial and printed_route.coords==coords_text() and not stale_plan()
+
+func valid_paper(paper: Dictionary) -> bool:
+	if paper.is_empty(): return true
+	for key in ["station","id","style","coords"]:
+		if not paper.get(key) is String: return false
+	for key in ["revision","burn","reserve","fuel","coast"]:
+		if not (paper.get(key) is float or paper.get(key) is int) or not is_finite(float(paper[key])): return false
+	return paper.id in IDS and paper.style in ["direct","economy"] and paper.coords.split(" ",false).size()==3
+
+func begin_nav_entry() -> String:
+	if loaded: return "Route already loaded.\n"+next_hint()
+	if phase not in ["docked","departure","injection"]: return "Use recalc for a recovery route first."
+	if plan.is_empty(): return "Choose your destination at CHART first.\nType: go chart\nThen: stations"
+	if not paper_current(): return "Print the current route at CHART first.\nType: go chart\nThen: print"
+	nav_stage=0
+	if entered_coords.distance_to(plan.target)<=2:
+		nav_stage=1
+		if absf(entered_burn-plan.burn)<0.01:
+			nav_stage=2
+			if absf(entered_reserve-plan.reserve)<0.1: nav_stage=3
+	return nav_prompt()
+
+func nav_prompt() -> String:
+	var title := "NAV / FLIGHT SHEET %03d\nTO %s\n" % [route_serial,NAMES[destination]]
+	match nav_stage:
+		0: return title+"1 OF 4 / COORDINATES\nRead X, Y and Z from the paper beside this screen.\nType the three numbers on one line, with spaces.\nKeep any minus signs. Units: km.\nExample format: -12.345 0.000 -67.890\nhelp repeats this step; cancel pauses entry."
+		1: return title+"2 OF 4 / BURN RATE\nCoordinates accepted.\nType the burn rate from the paper (kg/s).\nEnter just the number, then press Enter."
+		2: return title+"3 OF 4 / FUEL RESERVE\nBurn rate accepted.\nType the reserve from the paper (kg).\nEnter just the number, then press Enter."
+		3: return title+"4 OF 4 / LOAD THE ROUTE\nCoordinates, burn rate and reserve accepted.\nFuel check includes arrival braking.\nType: load\nThen type help for the next departure step."
+	return "Type plot to enter the printed route."
+
+func nav_entry(value: String) -> String:
+	if not paper_current():
+		nav_stage=-1
+		return "That flight sheet is superseded. Replot and print at CHART."
+	var values:=value.strip_edges().split(" ",false)
+	if nav_stage==0:
+		if values.size()!=3: return "Enter all three coordinates on one line: X Y Z.\n"+nav_prompt()
+		for item in values:
+			if not valid_number(item): return "Coordinates must be numbers. Keep minus signs; leave out X/Y/Z labels."
+		var candidate:=Vector3(float(values[0]),float(values[1]),float(values[2]))*1000
+		if candidate.distance_to(plan.target)>2: return "Those coordinates differ from the paper. Please try again.\n"+nav_prompt()
+		entered_coords=candidate
+		nav_stage=1
+	elif nav_stage in [1,2]:
+		if values.size()!=1 or not valid_number(values[0]): return "Enter just the number printed on the sheet."
+		var expected: float=plan.burn if nav_stage==1 else plan.reserve
+		if absf(float(values[0])-expected)>0.01: return "That value differs from the printed sheet. Please try again."
+		if nav_stage==1: entered_burn=float(values[0])
+		else: entered_reserve=float(values[0])
+		nav_stage+=1
+	elif nav_stage==3:
+		return load_route() if value.strip_edges().to_lower()=="confirm" else "Type load to confirm this route."
+	return nav_prompt()
+
+func guide_step(number: int, title: String, terminal: String, instruction: String, detail: String) -> Dictionary:
+	return {"number":number,"title":title,"terminal":terminal,"command":instruction,"detail":detail}
+
+func next_step() -> Dictionary:
+	if phase!="docked":
+		if phase in ["departure","injection"]:
+			if not loaded: return guide_step(4,"ENTER RECOVERY ROUTE","nav","plot","Print the new CHART route, then enter its values.")
+			return guide_step(10,"FLY THE DEPARTURE BURN","nav","status","Esc to fly. Arrows steer; W thrust; Shift fine.\nAt <3 m/s, cut thrust, align, and hold X.")
+		if phase=="coast":
+			if time_to_burn()<=WARNING_TIME: return guide_step(10,"RETURN FOR THE ARRIVAL BURN","nav","status","Get into the pilot seat. Burn in %.0f seconds.\nFast time is stopped; watch the middle NAV screen." % time_to_burn())
+			return guide_step(10,"COAST / SAFE TO LEAVE","nav","warp 5","Esc, look away from a screen, F to stand.\nThe alarm calls you back 75 seconds before the burn.")
+		if phase=="brake": return guide_step(10,"BRAKE FOR ARRIVAL","nav","status","Esc. Follow NAV yaw/pitch; W applies braking thrust.\nX stops rotation only, not your travel speed.")
+		if not approach_clearance: return guide_step(10,"REQUEST A BERTH","comms","approach","Then follow NAV to the berth, below 2 m/s.")
+		return guide_step(10,"CAPTURE THE BERTH","comms","dock","Within 20 m, below 2 m/s, heading 000; hold X.\nIf you overshoot, NAV: recalc. COMMS: rescue if needed.")
+	if not engine_on: return guide_step(1,"POWER THE ENGINES","engine","power on","Switch on the main engines before preparing the route.")
+	if not mixture_confirmed or absf(mixture-2.5)>0.01: return guide_step(2,"CONFIRM FUEL MIXTURE","fuel","mixture 2.5","Type the setting even if the gauge already reads 2.5.\nFuel flow is already set to the standard 6 kg/s.")
+	if plan.is_empty(): return guide_step(3,"CHOOSE YOUR DESTINATION","chart","stations","Then plot <station> direct. Example: plot tharsis direct.")
+	if stale_plan(): return guide_step(3,"UPDATE YOUR ROUTE","chart","plot %s %s" % [IDS[destination],plan.style],"Ship settings changed. Calculate and print a fresh sheet.")
+	if fuel<plan.fuel+plan.reserve: return guide_step(6,"TOP UP THE TANKS","comms","refuel","The fuel check includes the arrival burn and reserve.")
+	if not loaded:
+		if not paper_current(): return guide_step(4,"PRINT THE FLIGHT SHEET","chart","print","Take the paper to NAV; it appears beside the middle CRT.")
+		return guide_step(5,"ENTER THE PRINTED ROUTE","nav","plot" if nav_stage<0 else ("load" if nav_stage==3 else "help"),"NAV asks for coordinates, burn rate, then reserve.")
+	if clearance.is_empty(): return guide_step(6,"REQUEST TAKEOFF CLEARANCE","comms","request","ATC gives you a code to read back on this terminal.")
+	if not clearance_confirmed: return guide_step(6,"READ BACK THE ATC CODE","comms","code "+clearance,"Type the complete code above. It does not expire.")
+	if closures_busy: return guide_step(7,"WAIT FOR THE HATCH / RAMP","engine","help","Hardware is moving. This guide advances when it stops.")
+	if not hatch_closed: return guide_step(7,"CLOSE THE CARGO HATCH","engine","hatch close","Wait for SEALED before raising the ramp.")
+	if not ramp_raised: return guide_step(8,"RAISE THE LOADING RAMP","engine","ramp raise","The ramp folds and raises. Wait until it stops.")
+	if not cargo_secured: return guide_step(9,"SECURE YOUR CARGO","cargo","","Put the hand case in a berth; use F on receiving clamps.")
+	if coolant<=0: return guide_step(9,"RESTORE THE COOLANT CIRCUIT","engineering","","Finish the repair, close the cover, and restore the pump.")
+	return guide_step(10,"READY FOR TAKEOFF","comms","depart","After release, Esc to fly and follow the middle NAV screen.")
+
+func next_hint() -> String:
+	var step:=next_step()
+	return "NEXT: %s / %s\nType help for directions." % [step.terminal.to_upper(),step.command if not step.command.is_empty() else step.title]
+
+func help_text(terminal: String) -> String:
+	if terminal=="nav" and nav_stage>=0: return nav_prompt()
+	var step:=next_step()
+	var places: Dictionary={"chart":"front left CRT","nav":"middle CRT","fuel":"front right CRT","engine":"right arm / overhead centre","comms":"left arm / overhead right","cargo":"cargo hold restraint control","engineering":"engineering coolant pump"}
+	var lines: Array[String]=["FLIGHT GUIDE / STEP %02d OF 10" % step.number,step.title,"AT: %s / %s" % [step.terminal.to_upper(),places[step.terminal]]]
+	if step.terminal!=terminal and step.terminal in ["chart","nav","fuel","engine","comms"]: lines.append("GO THERE: go "+step.terminal)
+	if not step.command.is_empty(): lines.append("THEN TYPE: "+step.command)
+	lines.append(step.detail)
+	lines.append("help = next step | commands = command list")
+	return "\n".join(lines)

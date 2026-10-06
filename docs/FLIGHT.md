@@ -4,19 +4,23 @@ The default scene is `scenes/longhaul_flight.tscn`. The macOS launcher is `Fly L
 
 ## Your first departure
 
-Press **F** near the pilot seat. Look at a CRT and press **F** to lean in and type. **Enter** runs a command, **Up/Down** recalls command history, and **Escape** returns to the seat view. Typing does not operate the flight controls. Each terminal supports `help`, `status`, `checklist`, and `clear`.
+Docked launches open directly at the NAV guide. When walking, press **F** near the pilot seat; look at a CRT and press **F** to lean in and type. **Enter** runs a command, **Up/Down** recalls command history, and **Escape** returns to the seat view. Typing does not operate the flight controls. `help` (or `next`) shows the next unfinished step, the correct terminal, and the exact command. It updates as hardware finishes moving. `commands` (or `help all`) shows the command reference. `status`, `checklist`, and `clear` remain available.
+
+You can type `go engine`, `go fuel`, `go chart`, `go nav`, or `go comms` to move your view to that physical terminal. Escape still returns to your original pilot view.
 
 Type `stations` (or `destinations`) at **NAV or CHART** to list every station and its route ID. Your current dock is marked `[HERE]`. The directory also shows how to plot a route at CHART, then transfer its coordinates to NAV.
 
 1. **ENGINE** — right console arm (or overhead center): `power on`.
 2. **FUEL** — forward right: `mixture 2.5`, then `flow 6`.
-3. **CHART** — forward left: `destinations`, then `plot tharsis direct`. `map` shows current station orbits and the calculated transfer; `route` shows the readback. `economy` chooses a slower transfer candidate.
-4. **NAV** — forward center: copy the coordinates from CHART with `coords <x> <y> <z>`. They are kilometres; preserve negative signs. Enter `burn 6` and `reserve 200`, then `load`. Use the burn/reserve values actually printed by CHART if you change the setup.
+3. **CHART** — forward left: `stations`, then `plot tharsis direct` (or your chosen station). Type `print` to feed a paper flight sheet from the chart printer. `map` shows the orbits/transfer; `economy` chooses a slower candidate.
+4. **NAV** — forward center: type `go nav`, then `plot`. The printed sheet automatically appears beside the screen. NAV asks for X Y Z on one line (kilometres, including minus signs), then burn rate, then reserve. Enter only the requested numbers at each step. Type `load` when NAV confirms all three values. The older `coords`, `burn`, and `reserve` commands remain available through `commands`.
 5. **COMMS** — left console arm (or overhead right): `request`. Read the returned takeoff code back using `code <code>`.
 6. **ENGINE**: `hatch close`, wait until sealed, then `ramp raise`. The ramp folds and raises physically; wait for completion. `checklist` identifies anything missing. Cargo clamps must also be secured.
 7. **COMMS**: `depart`. The berth releases; you now control the ship.
 
-There is no clearance expiry or delivery deadline. If setup takes long enough that the calculated moving-station intercept is out of date, replot and enter fresh navigation values. Changed fuel flow, mixture, cargo mass, or coolant condition also require a fresh departure calculation. This prevents stale fuel estimates.
+Docked preparation now holds the simulation clock: reading, printing, and typing cannot expire your route. Normal orbital simulation starts when the berth releases. There is no clearance expiry or delivery deadline. Changing fuel flow, mixture, cargo mass, or coolant condition still requires replotting and printing a fresh sheet. An older sheet is retained as paper but rejected for guided entry after a new route is plotted. The guide identifies the required update.
+
+A blocked `depart` now names the missing step and gives directions, including the exact ATC readback code. You can type `help` at any point instead of memorizing the sequence.
 
 ## Manual flight
 
@@ -55,7 +59,7 @@ If you miss a burn, NAV `recalc` calculates a recovery from your real position a
 
 ## Save and resume
 
-The game autosaves once a minute when movable hardware and carried cargo are safe to save. COMMS `save` and `load` provide manual control. Flight state, fuel, needs, route, attitude/velocity, ramp/hatch, case berth/clamps, and the engineering repair state persist. Saves resume in the pilot seat at normal time; sleep/time acceleration never resume unattended. The next launch automatically loads `user://longhaul_flight_v1.json`. The earlier life slice uses a separate file.
+The game autosaves once a minute when movable hardware and carried cargo are safe to save. COMMS `save` and `load` provide manual control. Flight state, fuel, needs, route, printed sheet, partial NAV input, attitude/velocity, ramp/hatch, case berth/clamps, and the engineering repair state persist. Older saves migrate automatically; an expired docked route from the earlier build is recalculated once for unhurried preparation. Saves resume in the pilot seat at normal time; sleep/time acceleration never resume unattended. The next launch automatically loads `user://longhaul_flight_v1.json`. The earlier life slice uses a separate file.
 
 ## Simulation boundaries
 
@@ -65,7 +69,7 @@ Station exteriors and berths remain functional prototypes. Contracts, payments, 
 
 ## Validation
 
-The current run passes 106 checks. `--flight-test` covers command validation, departure interlocks, momentum/gravity, fuel use, rotational damping, all six outbound route choices through manual burns and docking, missed-burn recovery, warning/time-skip boundaries, survival interactions, physical terminal focus/input, working hatch/ramp, walking aboard and down the ramp, and save/load including malformed data rejection.
+The flight suite passes 106 checks, with 32 additional guidance/paper checks. `--flight-test` covers command validation, departure interlocks, momentum/gravity, fuel use, rotational damping, all six outbound route choices through manual burns and docking, missed-burn recovery, warning/time-skip boundaries, survival interactions, physical terminal focus/input, working hatch/ramp, walking aboard and down the ramp, and save/load including malformed data rejection. The guidance checks follow the paper-assisted startup through the real cockpit terminals, verify long preparation delays, old-save migration and partial entry persistence, and check that NAV and the paper both fit without overlapping.
 
 ```sh
 /Applications/Godot.app/Contents/MacOS/Godot --headless --fixed-fps 60 --path . --log-file /tmp/longhaul-flight-test.log res://scenes/longhaul_flight.tscn -- --flight-test

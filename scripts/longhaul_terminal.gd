@@ -14,6 +14,7 @@ var history: Array[String] = []
 var history_index := 0
 var focused := false
 var show_map := false
+var show_help := true
 var chart_map: Control
 var refresh_timer := 0.0
 
@@ -68,6 +69,7 @@ func label(at: Vector2, size_px: int, tint: Color) -> Label:
 func focus() -> void:
 	focused=true
 	show_map=false
+	show_help=true
 	if lines.is_empty(): append(host.flight.help_text(kind))
 	refresh()
 
@@ -79,11 +81,14 @@ func submit(value: String) -> void:
 	if value.strip_edges().is_empty(): return
 	history.append(value)
 	history_index=history.size()
+	show_help=value.strip_edges().to_lower() in ["help","next"]
 	show_map=kind=="chart" and value.strip_edges().to_lower()=="map"
 	if show_map:
 		entry=""
 		refresh()
 		return
+	if kind=="nav" and (host.flight.nav_stage>=0 or value.strip_edges().to_lower()=="plot"):
+		lines.clear()
 	if value.strip_edges().to_lower()=="clear": lines.clear()
 	else:
 		append("> "+value)
@@ -117,9 +122,9 @@ func refresh() -> void:
 	readout.add_theme_font_size_override("font_size",26)
 	if focused:
 		# Fixed visible history: long help/readback outputs remain scroll-free.
-		readout.text="\n".join(lines.slice(maxi(0,lines.size()-11)))
+		readout.text=state.help_text(kind) if show_help else "\n".join(lines.slice(maxi(0,lines.size()-11)))
 		prompt.text=kind.to_upper()+"> "+entry+"_"
-		footer.text="ENTER: RUN   UP/DOWN: HISTORY   ESC: STEP BACK"
+		footer.text="help: NEXT STEP | commands: LIST | go <terminal>"
 	else:
 		readout.text=state.status(kind)
 		if kind=="nav":
@@ -129,7 +134,7 @@ func refresh() -> void:
 		prompt.text="[F] "+kind.to_upper()+" TERMINAL"
 		if kind=="nav" and state.phase=="docked":
 			readout.add_theme_font_size_override("font_size",50)
-			readout.text="BERTH K-01 / DOCKED\nSTATIONS: LIST PORTS\nENGINE: CHECKLIST\nFUEL: MIXTURE 2.5\nCHART: PLOT ROUTE\nNAV: LOAD TRANSFER\nCOMMS: REQUEST"
+			readout.text="BERTH K-01 / DOCKED\nTYPE help TO BEGIN\n\n"+state.next_hint()
 		if kind=="nav" and state.phase=="approach":
 			var g: Dictionary=state.guidance()
 			readout.text="YAW %+.1f° / UP %+.1f°\nDELTA-V %.1f m/s\nRANGE %.0f m\nREL SPEED %.1f m/s\nCAPTURE <20m / <2m/s\nCOMMS: APPROACH / DOCK" % [g.yaw,g.pitch,g.dv.length(),state.ship_position.distance_to(state.station_position(state.destination,state.elapsed)),(state.velocity-state.station_velocity(state.destination,state.elapsed)).length()]

@@ -5,6 +5,7 @@ const Terminal = preload("res://scripts/longhaul_terminal.gd")
 const SAVE_FILE := "user://longhaul_flight_v1.json"
 var flight := FlightState.new()
 var terminals: Array = []
+var flight_sheet: Node3D
 var active_terminal: Node
 var camera_before_terminal := Transform3D.IDENTITY
 var cockpit_module: Node3D
@@ -48,6 +49,9 @@ func _ready() -> void:
 		add_child(terminal)
 		terminal.build(self,panel,roles.get(panel.get_meta("content"),"nav"))
 		terminals.append(terminal)
+	flight_sheet=preload("res://scripts/longhaul_flight_sheet.gd").new()
+	add_child(flight_sheet)
+	flight_sheet.build(self,terminals[0].panel)
 	_build_flight_space()
 	_register_life_actions()
 	announcement=Label.new()
@@ -61,7 +65,7 @@ func _ready() -> void:
 	sound=AudioStreamPlayer.new()
 	add_child(sound)
 	flight_ready=true
-	flight.alert("Welcome aboard. F: pilot seat. Aim at a CRT and F to type. CHART: help")
+	flight.alert("Welcome aboard. F to sit; look at any screen and F. Type help for your next step.")
 	Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
 	if "--flight-test" in OS.get_cmdline_user_args():
 		test_running=true
@@ -70,6 +74,9 @@ func _ready() -> void:
 		_capture_flight.call_deferred()
 	elif FileAccess.file_exists(SAVE_FILE):
 		load_session()
+	if not test_running and "--flight-capture" not in OS.get_cmdline_user_args() and flight.phase=="docked":
+		_take_seat()
+		open_terminal(terminals[1])
 
 func _exterior() -> void:
 	# A real hinge at the aft threshold carries geometry and collision together.
@@ -226,13 +233,19 @@ func aimed_terminal() -> Node:
 
 func open_terminal(terminal: Node) -> void:
 	if cargo_module.carrying: return
+	if active_terminal:
+		active_terminal.focused=false
+		active_terminal.refresh()
+	else:
+		camera_before_terminal=camera.transform
 	active_terminal=terminal
-	camera_before_terminal=camera.transform
 	var panel: Node3D=terminal.panel
 	var screen_size: Vector2=panel.get_meta("display_size")
 	var eye_distance:=0.174+screen_size.y*1.9
-	camera.global_transform=panel.global_transform*Transform3D(Basis.IDENTITY,Vector3(0,0,eye_distance))
-	camera.fov=55
+	var offset:=0.20 if terminal.kind=="nav" and not flight.printed_route.is_empty() else 0.0
+	camera.global_transform=panel.global_transform*Transform3D(Basis.IDENTITY,Vector3(offset,0,eye_distance))
+	var aspect:=get_viewport().get_visible_rect().size.aspect()
+	camera.fov=rad_to_deg(2*atan(tan(deg_to_rad(55)/2)*maxf(1,1.6/aspect))) if offset>0 else 55
 	terminal.focus()
 	player.velocity=Vector3.ZERO
 	Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
@@ -257,6 +270,13 @@ func terminal_command(kind: String, value: String) -> String:
 	sync_hardware()
 	var words:=value.strip_edges().to_lower().split(" ",false)
 	if words.is_empty(): return ""
+	if words[0]=="go":
+		if words.size()!=2 or words[1] not in ["chart","nav","fuel","engine","comms"]:
+			return "Use go chart, go nav, go fuel, go engine or go comms."
+		for terminal in terminals:
+			if terminal.kind==words[1]:
+				open_terminal(terminal)
+				return "Now at "+words[1].to_upper()+". Type help for your next step."
 	if kind=="engine" and words.size()==2:
 		if words[0]=="hatch" and words[1] in ["open","close"]:
 			if flight.phase!="docked": return "Hatch sealed for flight. Dock first."
@@ -278,6 +298,9 @@ func terminal_command(kind: String, value: String) -> String:
 			flight.drinks=12
 			return "Test supply: provisions restocked and coolant serviced."
 	var result: String=flight.command(kind,value)
+	if kind=="chart" and words[0]=="print" and result.contains("PRINTED"):
+		flight_sheet.refresh(true)
+		_play_chime()
 	_update_flight_world()
 	return result
 
@@ -411,7 +434,7 @@ func _process(delta: float) -> void:
 	cockpit_hint.visible=active_terminal==null
 	if active_terminal:
 		cockpit_hint.text="%s / TYPE COMMANDS ON THE CRT" % active_terminal.kind.to_upper()
-		controls.text="ENTER RUN   UP/DOWN HISTORY   ESC STEP BACK"
+		controls.text="ENTER RUN   HELP NEXT STEP   COMMANDS REFERENCE   GO NAV / CHART / FUEL / ENGINE / COMMS   ESC BACK"
 	else:
 		var target:=aimed_terminal()
 		if target: cockpit_hint.text="[F] USE "+target.kind.to_upper()+" TERMINAL"
@@ -492,13 +515,15 @@ func load_session(path:=SAVE_FILE) -> String:
 	if active_terminal: close_terminal()
 	_take_seat()
 	_update_flight_world()
-	flight.alert("Saved flight restored at normal time. Check NAV before applying thrust.")
+	flight.alert("Saved flight restored. Type help at any terminal for your next step.")
 	return flight.warning
 
 func _run_flight_tests() -> void:
 	await _frames(5)
 	var suite=load("res://scripts/longhaul_flight_test.gd").new()
 	var ok: bool=await suite.run(self)
+	var guide_suite=load("res://scripts/longhaul_flight_guidance_test.gd").new()
+	ok=(await guide_suite.run(self)) and ok
 	print("LONGHAUL FLIGHT ","PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
 
@@ -507,7 +532,14 @@ func _capture_flight() -> void:
 	var args:=OS.get_cmdline_user_args()
 	var index:=args.find("--flight-capture")
 	var mode:=args[index+1] if index+1<args.size() else "pilot"
-	if mode!="pilot":
+	if mode=="paper":
+		terminal_command("engine","power on")
+		terminal_command("fuel","mixture 2.5")
+		terminal_command("chart","plot tharsis direct")
+		terminal_command("chart","print")
+		open_terminal(terminals[1])
+		terminals[1].submit("plot")
+	elif mode!="pilot":
 		for terminal in terminals:
 			if terminal.kind==mode:
 				open_terminal(terminal)
