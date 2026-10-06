@@ -404,7 +404,7 @@ func _physics_process(delta: float) -> void:
 	if player == null:
 		return
 	var move := Vector2.ZERO
-	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or "--hab-test" in OS.get_cmdline_user_args() or "--longhaul-test" in OS.get_cmdline_user_args():
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or "--hab-test" in OS.get_cmdline_user_args() or "--longhaul-test" in OS.get_cmdline_user_args() or "--flight-test" in OS.get_cmdline_user_args():
 		move = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := player.basis * Vector3(move.x, 0, move.y)
 	var speed := 3.3 if Input.is_action_pressed("sprint") else 2.15

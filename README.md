@@ -1,3 +1,13 @@
+## Current playable build: Longhaul flight
+
+The default scene is now the detailed Longhaul with physical cockpit command-line terminals, manual Newtonian flight, calculated transfers, shipboard life, and manual arrival/docking. On macOS, double-click `Fly Longhaul.command` (Godot installed in Applications).
+
+Start with **F** to sit, look at a screen, then **F** to type. Every terminal supports `help`. Read [the flight guide](docs/FLIGHT.md) for the departure sequence and controls. The ship automatically resumes its last saved flight.
+
+The original game remains available in `scenes/main.tscn`, the earlier economic prototype in `scenes/life_slice.tscn`, and the unchanged design study in `scenes/longhaul_preview.tscn`.
+
+---
+
 # Space Trucking
 
 A first-person space trading game in voxel cassette futurism. Fly your ship, land in a station, walk to the exchange, buy cargo, carry it into your hold, then fly it somewhere that pays more.

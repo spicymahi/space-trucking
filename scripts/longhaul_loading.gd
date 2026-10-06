@@ -6,6 +6,8 @@ var leaves: Array[Node3D] = []
 var hatch_tween: Tween
 var status_labels: Array[Label3D] = []
 var status_lights: Array[MeshInstance3D] = []
+var ramp_trim: Node3D
+var flight_locked := false
 
 func build(ship: Node3D) -> void:
 	host = ship
@@ -45,6 +47,7 @@ func build(ship: Node3D) -> void:
 		box(Vector3(-1.26+i*0.23,0.043,10.91),Vector3(0.11,0.006,0.09),ORANGE)
 	# Connected ramp surface ribs and side strips follow its existing slope.
 	var trim := group(Vector3(0,-0.63,13.2))
+	ramp_trim = trim
 	trim.rotation.x = atan(1.2/4.2)
 	for x in [-1.32,1.32]:box(Vector3(x,0.101,0),Vector3(0.085,0.02,4.33),ORANGE,false,trim)
 	for i in 13:
@@ -58,6 +61,9 @@ func prompt(_action: String) -> String:
 
 func use(_action: String) -> void:
 	notice = ""
+	if flight_locked:
+		explain("Loading hatch locked in flight. Return to a station first.")
+		return
 	if hatch_moving: return
 	if hatch_open and _doorway_occupied():
 		explain("Step clear of the loading hatch to close it")

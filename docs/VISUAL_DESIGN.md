@@ -56,13 +56,13 @@ The loading hatch uses paired sliding leaves in the aft bulkhead, with fixed con
 Inspect the normal working view, both side views, the entry, the rear wall, and the ceiling. Check that the floor plan supports the intended activity, screens remain readable, equipment does not float or overlap, and the player can enter and leave safely. Test at the actual game window size.
 
 
-## Next approved work: cockpit flight loop (not implemented)
+## Approved cockpit flight requirements
 
-The user has requested a model change before implementation. Current room interactions and the separate life slice are prototypes; preserve the approved detailed Longhaul layout when connecting the simulation.
+The playable flight scene now connects the approved detailed Longhaul interior to flight. See `FLIGHT.md` for the implemented loop, controls, validation, and remaining simulation boundaries. The independent design study and earlier economic life slice remain available.
 
-All flight preparation and planning must happen on the physical cockpit computer terminals through command-line interfaces. Route planning, navigation entry, engine setup, and ATC each belong to the appropriate terminal. Guidance stays on cockpit displays. Command syntax and input focus still need implementation design.
+All flight preparation and planning must happen on the physical cockpit computer terminals through command-line interfaces. Route planning, navigation entry, engine setup, and ATC each belong to the appropriate terminal. Guidance stays on cockpit displays. The flight scene implements CHART, NAV, FUEL, ENGINE, and COMMS command lines with a close physical view for typing.
 
-- Short departure checklist: power engines, set fuel mixture, plot course, obtain an ATC takeoff code, close cargo hatch, and raise the ramp. The walkthrough currently has a fixed ramp; a working raised state is future work.
+- Short departure checklist: power engines, set fuel mixture, plot course, obtain an ATC takeoff code, close cargo hatch, and raise the ramp. The design study keeps its fixed ramp; the flight scene has a folding, powered ramp.
 - Momentum-based flight: releasing thrust preserves motion, the pilot brakes manually, and a separate key stops rotation only.
 - Select a destination on the route computer, obtain calculated coordinates and burn information, then enter the required values into the navigation computer. Begin with calculated routes rather than freehand orbital planning.
 - Guidance tells the player where to point and what velocity to achieve. The player manually establishes the trajectory; the computer then confirms that it is safe to leave the controls. Matching orientation alone is insufficient: travel direction and speed must also agree with the route.
@@ -76,10 +76,10 @@ All flight preparation and planning must happen on the physical cockpit computer
 - Allow route recalculation and recovery if the player misses a burn.
 - Keep the experience cozy, with no delivery deadlines or punitive scheduling.
 
-These are confirmed flight requirements; implementation has not started.
+These requirements are implemented in the flight scene. Gravity assists remain a later extension; current routes use a central gravity field and moving station intercepts.
 
 ## Launch and validation snapshot
 
 The repository root includes macOS launchers for the original hab study, the separate life slice, and the detailed Longhaul walkthrough. They expect Godot at `/Applications/Godot.app/Contents/MacOS/Godot`; other platforms can open the corresponding scenes directly in Godot. Generated ship concepts are archived in `docs/ship-concepts`.
 
-The latest Longhaul tour passed its walking and cockpit checks plus 48 hab, 73 service, and 100 aft checks. The life slice previously passed its 51-check suite. The original startup scene remains unchanged. New flight-loop implementation has not started.
+The latest Longhaul tour passed its walking and cockpit checks plus 48 hab, 73 service, and 100 aft checks. The life slice previously passed its 51-check suite. The original game scene is retained; the default startup is now the flight scene. The new flight scene has its own tests, documented in `FLIGHT.md`.

@@ -8,7 +8,7 @@ config_version=5
 
 config/name="Space Trucking"
 config/description="First-person voxel space hauling in a cassette-futurist solar system."
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/longhaul_flight.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 

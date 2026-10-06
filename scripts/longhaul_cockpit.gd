@@ -86,6 +86,8 @@ func monitor(pos: Vector3, size: Vector2, content: String, tilt := Vector3.ZERO,
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	screen.material_override = material
 	panel.add_child(screen)
+	panel.set_meta("screen_mesh", screen)
+	panel.set_meta("content", content)
 	for x in [-1, 1]:
 		for y in [-1, 1]:
 			block(Vector3(x*(size.x/2+0.052),y*(size.y/2+0.05),0.13),Vector3(0.024,0.024,0.015),BLACK,false,panel)
@@ -119,6 +121,7 @@ func _window() -> void:
 		block(Vector3(x,1.62,-12.10),Vector3(0.075,1.26,0.13),BLACK)
 	for y in [1.01,2.22]: block(Vector3(0,y,-12.09),Vector3(3.15,0.07,0.13),BLACK)
 	# Sparse exterior set dressing visible through actual transparent glass.
+	if host.has_method("uses_flight_world"): return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9841
 	for i in 100:
