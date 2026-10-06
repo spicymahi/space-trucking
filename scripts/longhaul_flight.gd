@@ -644,6 +644,20 @@ func _capture_flight() -> void:
 		get_viewport().get_texture().get_image().save_png("/tmp/longhaul-flight-printer.png")
 		get_tree().quit()
 		return
+	elif mode=="docking":
+		flight.command("engine","port on")
+		flight.command("engine","starboard on")
+		flight.plan_route("tharsis")
+		flight.entered_coords=flight.plan.target
+		flight.entered_burn=6
+		flight.entered_reserve=200
+		flight.load_route()
+		flight.phase="approach"
+		flight.ship_position=flight.station_position(flight.destination,flight.elapsed)+Vector3(0,0,-100)
+		flight.velocity=flight.station_velocity(flight.destination,flight.elapsed)
+		flight.command("nav","approach")
+		flight.command("nav","auto dock")
+		for i in 50: flight.tick(0.1)
 	elif mode!="pilot":
 		if mode in ["map","distance","velocity","radar"]:
 			flight.command("engine","port on")
@@ -659,9 +673,9 @@ func _capture_flight() -> void:
 			if mode in ["radar","velocity"]:
 				flight.release_controls()
 				flight.phase="approach"
-				flight.ship_position=flight.station_position(flight.destination,flight.elapsed)+Vector3(-18,-9,480)
-				flight.velocity=flight.station_velocity(flight.destination,flight.elapsed)+Vector3(1.2,-0.4,-6)
-				flight.attitude=Basis.IDENTITY
+				flight.ship_position=flight.station_position(flight.destination,flight.elapsed)+Vector3(-18,-9,-480)
+				flight.attitude=Basis.looking_at(flight.BERTH_FORWARD)
+				flight.velocity=flight.station_velocity(flight.destination,flight.elapsed)+flight.attitude*Vector3(1.2,-0.4,-6)
 		for terminal in terminals:
 			if terminal.kind==mode:
 				open_terminal(terminal)

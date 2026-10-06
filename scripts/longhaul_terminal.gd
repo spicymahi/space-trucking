@@ -276,7 +276,7 @@ func _show_radar() -> void:
 	telemetry_note.position=Vector2(446,111)
 	telemetry_note.size=Vector2(372,401)
 	telemetry_note.add_theme_font_size_override("font_size",29)
-	telemetry_note.text="RANGE %s\nX %s %s\nY %s %s\n%s %.1f m/s\nDRIFT X %+.1f m/s\nDRIFT Y %+.1f m/s\nHDG %03.0f / PITCH %+.0f\nBERTH HDG 000 / P 000\nBERTH %s\nCAPTURE <20m / <2m/s\n%s" % [distance_text(distance),axis_direction(offset.x,"RIGHT","LEFT"),distance_text(offset.x),axis_direction(offset.y,"UP","DOWN"),distance_text(offset.y),"CLOSING" if closing>=0 else "OPENING",absf(closing),velocity.x,velocity.y,heading,pitch,berth,"O TARGET / + YOUR NOSE" if forward else "! BEHIND / TURN TO FACE"]
+	telemetry_note.text="RANGE %s\nX %s %s\nY %s %s\n%s %.1f m/s\nDRIFT X %+.1f m/s\nDRIFT Y %+.1f m/s\nHDG %03.0f / PITCH %+.0f\nBERTH HDG 180 / P 000\nBERTH %s\nCAPTURE <20m / <2m/s\n%s" % [distance_text(distance),axis_direction(offset.x,"RIGHT","LEFT"),distance_text(offset.x),axis_direction(offset.y,"UP","DOWN"),distance_text(offset.y),"CLOSING" if closing>=0 else "OPENING",absf(closing),velocity.x,velocity.y,heading,pitch,berth,"O TARGET / + YOUR NOSE" if forward else "! BEHIND / TURN TO FACE"]
 
 func _process(delta: float) -> void:
 	refresh_timer-=delta

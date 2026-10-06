@@ -8,6 +8,7 @@ const DRY_MASS := 18000.0
 const CAPACITY := 3000.0
 const RESERVE := 200.0
 const WARNING_TIME := 90.0
+const BERTH_FORWARD := Vector3.BACK # The pad entrance is on -Z; arrive nose-first toward +Z.
 const IDS := ["ceres", "tharsis", "kepler", "helios"]
 const NAMES := ["Ceres Yard", "Tharsis Ring", "Kepler Depot", "Helios Anchorage"]
 const ORIGINS := [Vector3(0,0,0), Vector3(60000,0,-80000), Vector3(-140000,15000,-260000), Vector3(360000,-15000,-520000)]
@@ -29,6 +30,7 @@ var engine_on := false
 var engines := [false, false]
 var autopilot := false
 var auto_docking := false
+var docking_stage := ""
 var arrival_hold := false
 var nav_selected := false
 var hold_offset := Vector3(0,0,-600)
@@ -200,7 +202,8 @@ func depart() -> String:
 	arrival_hold=false
 	warp=1
 	trail.clear()
-	alert("Berth released. Fly forward through the green corridor. NAV available beyond 300 m.")
+	var exit_instruction: String="Back out with S through the green corridor." if (-attitude.z).dot(BERTH_FORWARD)>0.5 else "Fly forward through the green corridor."
+	alert("Berth released. %s NAV available beyond 300 m." % exit_instruction)
 	return warning
 
 func alert(message: String) -> void:
@@ -222,8 +225,9 @@ func guidance() -> Dictionary:
 	var direction := dv.normalized() if dv.length()>0.5 else -attitude.z
 	if phase in ["departure","injection"] and dv.length()<3:
 		direction=required_velocity.normalized()
-	if phase=="approach" and ship_position.distance_to(station_position(destination,elapsed))<20 and (velocity-station_velocity(destination,elapsed)).length()<2:
-		direction=Vector3.FORWARD
+	if phase=="approach":
+		# The approach cue points the nose into the berth, including while braking.
+		direction=(station_position(destination,elapsed)-ship_position).normalized() if station_range()>30 else BERTH_FORWARD
 	var local := attitude.inverse()*direction
 	var yaw := rad_to_deg(atan2(-local.x,-local.z))
 	var pitch_error := rad_to_deg(atan2(local.y,Vector2(local.x,local.z).length()))
@@ -346,8 +350,8 @@ func _step(dt: float, thrust: Vector3, rotation_input: Vector3, stop_rotation: b
 				warp=1
 				sleeping=false
 				alert("Station arrival. NAV remains engaged, holding 600 m from the berth. Type approach for berth K-01, then auto dock; or manual to fly yourself.")
-	if auto_docking and station_range()<12 and relative_speed()<0.5:
-		if (-attitude.z).dot(Vector3.FORWARD)>cos(deg_to_rad(5)):
+	if auto_docking and docking_stage=="final" and station_range()<12 and relative_speed()<0.5:
+		if (-attitude.z).dot(BERTH_FORWARD)>cos(deg_to_rad(5)):
 			dock()
 
 func dock() -> String:
@@ -356,16 +360,17 @@ func dock() -> String:
 	var d := ship_position.distance_to(station_position(destination,elapsed))
 	var s := (velocity-station_velocity(destination,elapsed)).length()
 	if d>20 or s>2: return "Berth K-01 capture needs <20 m / <2 m/s. Now %.0f m / %.1f m/s.\nUse auto dock within 1000 m / 15 m/s, or manual to fly closer." % [d,s]
-	if (-attitude.z).dot(Vector3.FORWARD)<cos(deg_to_rad(8)) or angular_velocity.length()>0.02: return "Align berth heading 000 / pitch 000 and stop rotation [X]."
+	if (-attitude.z).dot(BERTH_FORWARD)<cos(deg_to_rad(8)) or angular_velocity.length()>0.02: return "Align nose-first to berth heading 180 / pitch 000 and stop rotation [X]."
 	dock_id=destination
 	autopilot=false
 	auto_docking=false
+	docking_stage=""
 	arrival_hold=false
 	sleeping=false
 	phase="docked"
 	ship_position=station_position(dock_id,elapsed)
 	velocity=station_velocity(dock_id,elapsed)
-	attitude=Basis.IDENTITY
+	attitude=Basis.looking_at(BERTH_FORWARD)
 	angular_velocity=Vector3.ZERO
 	completed_trips+=1
 	loaded=false
@@ -509,7 +514,7 @@ func status(terminal: String) -> String:
 
 func snapshot() -> Dictionary:
 	var result := {"version":1}
-	for key in ["autopilot","auto_docking","arrival_hold","nav_selected","paper_serial","selected_paper","paper_visible","route_serial","nav_stage","elapsed","phase","dock_id","destination","fuel","cargo_mass","mixture_confirmed","mixture","flow","engine_on","coolant","hatch_closed","ramp_raised","cargo_secured","loaded","entered_burn","entered_reserve","clearance","clearance_confirmed","approach_clearance","notified","food","water","hygiene","rest","rations","drinks","completed_trips","misses","warning","session_message"]:
+	for key in ["autopilot","auto_docking","docking_stage","arrival_hold","nav_selected","paper_serial","selected_paper","paper_visible","route_serial","nav_stage","elapsed","phase","dock_id","destination","fuel","cargo_mass","mixture_confirmed","mixture","flow","engine_on","coolant","hatch_closed","ramp_raised","cargo_secured","loaded","entered_burn","entered_reserve","clearance","clearance_confirmed","approach_clearance","notified","food","water","hygiene","rest","rations","drinks","completed_trips","misses","warning","session_message"]:
 		result[key]=get(key)
 	for key in ["ship_position","velocity","angular_velocity","required_velocity"]:
 		var v: Vector3 = get(key)
@@ -526,7 +531,7 @@ func snapshot() -> Dictionary:
 		for key in ["target","velocity"]:
 			var v: Vector3=plan[key]
 			result.plan[key]=[v.x,v.y,v.z]
-	result["flight_revision"]=3
+	result["flight_revision"]=4
 	return result
 
 func restore(data: Dictionary) -> bool:
@@ -535,6 +540,7 @@ func restore(data: Dictionary) -> bool:
 	for key in ["printed_route","entered_coords","route_serial","nav_stage"]:
 		if not data.has(key): data[key]={"printed_route":{},"entered_coords":null,"route_serial":0,"nav_stage":-1}[key]
 	var defaults := snapshot()
+	if not data.has("docking_stage"): data.docking_stage=""
 	for key in ["autopilot","auto_docking","arrival_hold","nav_selected","paper_serial","selected_paper","paper_visible","papers","trail","engines"]:
 		if not data.has(key): data[key]=defaults[key]
 	if not data.has("flight_revision"):
@@ -542,7 +548,7 @@ func restore(data: Dictionary) -> bool:
 		data.nav_selected=data.get("loaded",false)
 	# Previous builds treated hold / docking as NAV being off. They are engaged modes.
 	if data.arrival_hold or data.auto_docking: data.autopilot=true
-	data.flight_revision=3
+	data.flight_revision=4
 	for key in defaults:
 		if not data.has(key): return false
 	# Validate into a candidate before changing the live model.
@@ -580,6 +586,7 @@ func restore(data: Dictionary) -> bool:
 	if data.autopilot and data.phase=="approach" and not (data.auto_docking or data.arrival_hold): return false
 	if (data.auto_docking or data.arrival_hold) and data.phase!="approach": return false
 	if data.auto_docking and not data.approach_clearance: return false
+	if data.docking_stage not in ["","clearance","overhead","entry","final"]: return false
 	if not data.printed_route is Dictionary or not valid_paper(data.printed_route): return false
 	if int(data.nav_stage) not in [-1,0,1,2,3] or data.route_serial<0: return false
 	if data.entered_coords!=null:
@@ -702,6 +709,7 @@ func engage_navigation() -> String:
 func release_controls() -> void:
 	autopilot=false
 	auto_docking=false
+	docking_stage=""
 	arrival_hold=false
 	warp=1
 	sleeping=false
@@ -714,7 +722,7 @@ func request_approach() -> String:
 	# Recognize the physical approach without taking control from an engaged NAV.
 	if not autopilot and not auto_docking and not arrival_hold and station_range()<=5000:
 		phase="approach"
-	return "ATC / %s\nBERTH K-01 AUTOMATICALLY ASSIGNED / CLEARANCE CONFIRMED\nType auto dock within 1000 m and below 15 m/s.\nOr manual, then dock within 20 m / 2 m/s, heading 000 / pitch 000.\nNo berth selection command is needed; clearance has no expiry." % NAMES[destination]
+	return "ATC / %s\nBERTH K-01 AUTOMATICALLY ASSIGNED / CLEARANCE CONFIRMED\nType auto dock within 1000 m and below 15 m/s.\nOr manual, then dock nose-first within 20 m / 2 m/s, heading 180 / pitch 000.\nNo berth selection command is needed; clearance has no expiry." % NAMES[destination]
 
 func engage_docking() -> String:
 	if phase=="docked": return "Already docked at %s / berth K-01." % NAMES[dock_id]
@@ -725,13 +733,35 @@ func engage_docking() -> String:
 	autopilot=true
 	arrival_hold=false
 	auto_docking=true
+	docking_stage=""
 	warp=1
 	sleeping=false
-	alert("NAV auto dock engaged for berth K-01. Safe to leave controls; only the manual command cancels assistance.")
+	alert("NAV auto dock engaged for berth K-01. Aligning for a nose-first approach. Safe to leave controls; only the manual command cancels assistance.")
 	return warning
+
+func docking_target() -> Vector3:
+	var station:=station_position(destination,elapsed)
+	var relative:=ship_position-station
+	if docking_stage=="":
+		# Use the open end of the pad even when assistance starts beside or behind it.
+		var in_lane:=relative.z<=0 and Vector2(relative.x,relative.y).length()<maxf(3,-relative.z*0.1)
+		docking_stage="final" if in_lane else ("clearance" if relative.z>-60 else "entry")
+	if docking_stage=="clearance":
+		if relative.y<50: return station+Vector3(relative.x,60,relative.z)
+		docking_stage="overhead"
+	if docking_stage=="overhead":
+		var overhead:=Vector3(0,60,-100)
+		if relative.distance_to(overhead)>5 or relative_speed()>1: return station+overhead
+		docking_stage="entry"
+	if docking_stage=="entry":
+		var entrance:=Vector3(0,0,-100)
+		if relative.distance_to(entrance)>3 or relative_speed()>0.5: return station+entrance
+		docking_stage="final"
+	return station
 
 func automatic_thrust(dt: float) -> Vector3:
 	var dv:=Vector3.ZERO
+	var docking_direction:=BERTH_FORWARD
 	if autopilot and phase in ["injection","coast"]:
 		solver_timer-=dt
 		if solver_timer<=0:
@@ -739,15 +769,19 @@ func automatic_thrust(dt: float) -> Vector3:
 			solver_timer=1.0
 		dv=required_velocity-velocity
 	else:
-		var target:=station_position(destination,elapsed)+(Vector3.ZERO if auto_docking else hold_offset)
+		var target:=docking_target() if auto_docking else station_position(destination,elapsed)+hold_offset
 		var offset:=target-ship_position
 		var max_speed:=12.0 if auto_docking else 400.0
 		var closing:=minf(max_speed,minf(offset.length()*0.16,sqrt(2*maxf(max_acceleration(),0.1)*0.50*offset.length())))
+		if auto_docking:
+			docking_direction=BERTH_FORWARD if docking_stage=="final" else offset.normalized()
+			# Brake and turn first. Translation must not back the ship into its approach.
+			if (-attitude.z).dot(docking_direction)<cos(deg_to_rad(15)): closing=0
 		required_velocity=station_velocity(destination,elapsed)+offset.normalized()*closing
 		dv=required_velocity-velocity
 	var wanted_direction:=dv.normalized() if dv.length()>1 else -attitude.z
 	if arrival_hold: wanted_direction=(station_position(destination,elapsed)-ship_position).normalized()
-	if auto_docking: wanted_direction=Vector3.FORWARD
+	if auto_docking: wanted_direction=docking_direction
 	if wanted_direction.length()>0.1:
 		var up:=Vector3.UP if absf(wanted_direction.dot(Vector3.UP))<0.99 else Vector3.RIGHT
 		attitude=attitude.slerp(Basis.looking_at(wanted_direction,up),minf(1,dt*0.9)).orthonormalized()

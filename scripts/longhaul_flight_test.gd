@@ -23,9 +23,11 @@ func prepare(s, id: String="tharsis", style: String="direct") -> void:
 
 func fly_departure(s) -> bool:
 	s.depart()
+	# New arrivals park nose-in; reverse out through the same open corridor.
+	var departure_thrust: Vector3=Vector3.BACK if (-s.attitude.z).dot(Vector3.BACK)>0 else Vector3.FORWARD
 	for i in 160:
 		if s.safe_departure(): break
-		s.tick(0.5,Vector3.FORWARD*0.25)
+		s.tick(0.5,departure_thrust*0.25)
 	s.engage_navigation()
 	return s.autopilot
 
@@ -48,10 +50,10 @@ func automatic_dock(s) -> bool:
 func manual_dock(s) -> bool:
 	s.command("comms","approach")
 	s.command("nav","manual")
-	s.attitude=Basis.IDENTITY
+	s.attitude=Basis.looking_at(Vector3.BACK,Vector3.UP)
 	for i in 1500:
 		var g: Dictionary=s.guidance()
-		s.tick(0.1,(g.dv/s.max_acceleration()*0.9).limit_length(1))
+		s.tick(0.1,(s.attitude.inverse()*g.dv/s.max_acceleration()*0.9).limit_length(1))
 		if s.station_range()<12 and s.relative_speed()<1: break
 	s.command("comms","dock")
 	return s.phase=="docked"
@@ -84,7 +86,76 @@ func check_docking_aliases() -> void:
 	legacy_manual.ship_position=legacy_manual.station_position(legacy_manual.destination,legacy_manual.elapsed)+Vector3(0,0,-5)
 	legacy_manual.velocity=legacy_manual.station_velocity(legacy_manual.destination,legacy_manual.elapsed)
 	legacy_manual.approach_clearance=true
-	check(legacy_manual.command("nav","dock").contains("Docked"),"Manual capture accepts a legacy phase beside the assigned berth")
+	check(not legacy_manual.command("nav","dock").contains("Docked") and legacy_manual.phase!="docked","Manual capture rejects the old stern-first heading")
+	legacy_manual.attitude=Basis.looking_at(Vector3.BACK,Vector3.UP)
+	check(legacy_manual.command("nav","dock").contains("Docked"),"Manual capture accepts a legacy phase at the nose-first berth heading")
+	check((-legacy_manual.attitude.z).dot(Vector3.BACK)>0.999,"Manual capture keeps the nose pointed into the berth")
+
+func check_nose_first_docking() -> void:
+	var turning=State.new()
+	prepare(turning)
+	turning.phase="approach"
+	turning.ship_position=turning.station_position(turning.destination,turning.elapsed)+Vector3(0,0,-500)
+	turning.velocity=turning.station_velocity(turning.destination,turning.elapsed)
+	turning.command("nav","approach")
+	turning.command("nav","auto dock")
+	var start_range: float=turning.station_range()
+	turning.tick(1)
+	check(turning.phase=="approach" and start_range-turning.station_range()<0.5,"Wrong-facing autodock turns before closing on the berth")
+	var resumed=State.new()
+	check(resumed.restore(JSON.parse_string(JSON.stringify(turning.snapshot()))) and resumed.auto_docking,"Mid-turn autodock survives JSON save and load")
+	var old_docking: Dictionary=turning.snapshot()
+	old_docking.flight_revision=3
+	old_docking.erase("docking_stage")
+	old_docking.autopilot=false
+	var legacy_resume=State.new()
+	check(legacy_resume.restore(JSON.parse_string(JSON.stringify(old_docking))) and legacy_resume.autopilot and legacy_resume.auto_docking,"Older docking saves migrate to engaged nose-first assistance")
+	var no_reverse:=true
+	var forward_samples:=0
+	var capture_continuity:=false
+	for frame in 1000:
+		var before_nose: Vector3=-resumed.attitude.z
+		resumed.tick(0.2)
+		if resumed.phase=="docked":
+			capture_continuity=before_nose.dot(-resumed.attitude.z)>cos(deg_to_rad(1))
+			break
+		var relative_velocity: Vector3=resumed.velocity-resumed.station_velocity(resumed.destination,resumed.elapsed)
+		var to_berth: Vector3=(resumed.station_position(resumed.destination,resumed.elapsed)-resumed.ship_position).normalized()
+		if relative_velocity.dot(to_berth)>0.5:
+			forward_samples+=1
+			if relative_velocity.dot(-resumed.attitude.z)<-0.1: no_reverse=false
+	check(resumed.phase=="docked" and forward_samples>50 and no_reverse,"Resumed autodock flies toward the berth nose-first")
+	check(capture_continuity and (-resumed.attitude.z).dot(Vector3.BACK)>0.999,"Berth capture preserves the inward heading without a rotation snap")
+	var parked=State.new()
+	check(parked.restore(JSON.parse_string(JSON.stringify(resumed.snapshot()))) and parked.attitude.is_equal_approx(resumed.attitude),"Nose-in parked orientation survives save and load")
+	var old_parked: Dictionary=resumed.snapshot()
+	old_parked.flight_revision=3
+	old_parked.attitude=[1,0,0,0,1,0,0,0,1]
+	check(parked.restore(old_parked) and parked.attitude.is_equal_approx(Basis.IDENTITY),"Older outward-facing docked saves keep their parked orientation")
+	for offset in [Vector3(-280,0,-120),Vector3(0,0,450)]:
+		var entry=State.new()
+		prepare(entry)
+		entry.phase="approach"
+		entry.ship_position=entry.station_position(entry.destination,entry.elapsed)+offset
+		entry.velocity=entry.station_velocity(entry.destination,entry.elapsed)
+		entry.command("nav","approach")
+		entry.command("nav","auto dock")
+		var avoids_spine:=true
+		var nose_first:=true
+		var final_samples:=0
+		for frame in 1800:
+			entry.tick(0.2)
+			if entry.phase=="docked": break
+			var relative: Vector3=entry.ship_position-entry.station_position(entry.destination,entry.elapsed)
+			if absf(relative.x)<35 and absf(relative.y)<12 and relative.z>25 and relative.z<65: avoids_spine=false
+			if relative.z<0 and relative.length()<100:
+				var closing_velocity: Vector3=entry.velocity-entry.station_velocity(entry.destination,entry.elapsed)
+				if closing_velocity.dot(-relative.normalized())>0.5:
+					final_samples+=1
+					if closing_velocity.dot(-entry.attitude.z)<-0.1: nose_first=false
+		var label: String="Rear" if offset.z>0 else "Side"
+		check(entry.phase=="docked" and avoids_spine,label+" autodock entry routes around station structure")
+		check(final_samples>10 and nose_first and (-entry.attitude.z).dot(Vector3.BACK)>0.999,label+" autodock entry finishes nose-first")
 
 func check_sleep_boundary(coast_state: Dictionary) -> void:
 	var boundary=State.new()
@@ -210,6 +281,7 @@ func run(host) -> bool:
 	s.velocity=speed
 	check(manual_dock(s),"Manual station approach and capture remain available")
 	check_docking_aliases()
+	check_nose_first_docking()
 	check_sleep_boundary(coast_state)
 	check_reference_axes()
 	for id in ["tharsis","kepler","helios"]:
