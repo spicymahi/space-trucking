@@ -1,0 +1,14 @@
+[
+  {
+    "asset": "longhaul_interior",
+    "objects": 735,
+    "triangles": 806040,
+    "bytes": 33475716
+  },
+  {
+    "asset": "longhaul_complete",
+    "objects": 855,
+    "triangles": 871520,
+    "bytes": 36707172
+  }
+]
