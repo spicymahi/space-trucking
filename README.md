@@ -2,7 +2,9 @@
 
 The default scene is now the detailed Longhaul with physical cockpit command-line terminals, manual station flight, automatic interstation travel, printed checklists and route sheets, shipboard life, and optional docking assistance. On macOS, double-click `Fly Longhaul.command` (Godot installed in Applications).
 
-Start at the **CHECKLIST** computer and type `print` for the command sheet. Look at a screen and press **F** to type. `help` is a command reference. **P** reads/stows paper; **Tab** cycles sheets; **Delete** recycles them outside terminals. Read [the flight guide](docs/FLIGHT.md) for the departure sequence and controls. The ship automatically resumes its last saved flight.
+Start at the **CHECKLIST** computer and type `print` for the command sheet. Look at a screen and press **F** to type. `help` is a command reference. **Tab** pins/stows a sheet beside the active screen, **Shift+Tab** cycles sheets, and **Delete** recycles the visible sheet. **P** reads a full page outside terminals. Read [the flight guide](docs/FLIGHT.md) for the departure sequence and controls. The ship automatically resumes its last saved flight.
+
+The upper screens show station radar, relative velocity along each ship axis, and destination distance. Use `display NAV` (or another screen name) at any cockpit terminal to choose what it displays. NAV stays engaged until you type `manual` or propulsion fails; sleep ends at least 90 seconds before the arrival braking point. For docking, `approach` assigns your berth automatically, then `auto dock` can guide the final approach when close and slow enough.
 
 The original game remains available in `scenes/main.tscn`, the earlier economic prototype in `scenes/life_slice.tscn`, and the unchanged design study in `scenes/longhaul_preview.tscn`.
 
@@ -26,7 +28,9 @@ Built with Godot 4 for macOS and Steam Deck (1280x800, keyboard/mouse or gamepad
 
 The first import takes a few seconds while Godot builds its cache.
 
-## The first run
+## Original prototype: the first run
+
+The instructions below describe `scenes/main.tscn`. Use [the flight guide](docs/FLIGHT.md) for the default Longhaul build.
 
 You start on foot on pad 07 at Ceres Yard, behind your ship, the Kestrel-9.
 

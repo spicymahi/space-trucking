@@ -7,6 +7,7 @@ var flight := FlightState.new()
 var terminals: Array = []
 var flight_sheet: Node3D
 var print_camera_tween: Tween
+var paper_pinned := false
 var active_terminal: Node
 var camera_before_terminal := Transform3D.IDENTITY
 var cockpit_module: Node3D
@@ -44,7 +45,7 @@ func _ready() -> void:
 		if child.get_script()==preload("res://scripts/longhaul_cockpit.gd"):
 			cockpit_module=child
 			break
-	var roles={"nav":"chart","dock":"nav","fuel":"checklist","drive":"engine","comms":"comms","radar":"fuel","power":"map"}
+	var roles={"nav":"chart","dock":"nav","fuel":"checklist","drive":"engine","comms":"comms","radar":"radar","power":"velocity"}
 	for panel in cockpit_module.monitor_faces:
 		# Keep the status glass below the overhead cable supports.
 		if panel.position.y>2: panel.position.y-=0.10
@@ -246,16 +247,49 @@ func open_terminal(terminal: Node) -> void:
 	else:
 		camera_before_terminal=camera.transform
 	active_terminal=terminal
-	var panel: Node3D=terminal.panel
-	var screen_size: Vector2=panel.get_meta("display_size")
-	var eye_distance:=0.174+screen_size.y*(1.45 if terminal.kind in ["map","distance","fuel"] else 1.9)
-	var offset:=0.20 if terminal.kind not in ["map","distance","fuel"] and flight.paper_visible and not flight.current_paper().is_empty() else 0.0
-	camera.global_transform=panel.global_transform*Transform3D(Basis.IDENTITY,Vector3(offset,0,eye_distance))
-	var aspect:=get_viewport().get_visible_rect().size.aspect()
-	camera.fov=rad_to_deg(2*atan(tan(deg_to_rad(55)/2)*maxf(1,1.6/aspect))) if offset>0 else (75 if terminal.kind in ["map","distance","fuel"] else 55)
+	frame_terminal(terminal)
 	terminal.focus()
 	player.velocity=Vector3.ZERO
 	Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
+
+func frame_terminal(terminal: Node) -> void:
+	var panel: Node3D=terminal.panel
+	var screen_size: Vector2=panel.get_meta("display_size")
+	var offset:=0.20 if paper_pinned and not flight.current_paper().is_empty() else 0.0
+	var distance:=screen_size.y*1.9
+	if offset>0:
+		distance=maxf(distance,(screen_size.x/2+offset)/(tan(deg_to_rad(55)/2)*1.6)*1.1)
+	camera.global_transform=panel.global_transform*Transform3D(Basis.IDENTITY,Vector3(offset,0,0.174+distance))
+	var aspect:=get_viewport().get_visible_rect().size.aspect()
+	camera.fov=rad_to_deg(2*atan(tan(deg_to_rad(55)/2)*maxf(1,1.6/aspect))) if offset>0 else 55
+	# Very wide overhead screens need a wider lens when leaned in.
+	if offset==0 and screen_size.x/screen_size.y>1.8: camera.fov=65
+
+func paper_key(event: InputEventKey) -> bool:
+	if not event.pressed or event.echo: return false
+	var code:=event.physical_keycode if event.physical_keycode!=0 else event.keycode
+	if code==KEY_TAB:
+		if flight.papers.is_empty():
+			flight.alert("Paper rack empty. Print a checklist or route sheet first.")
+		else:
+			if event.shift_pressed: flight.cycle_paper()
+			else:
+				paper_pinned=not paper_pinned
+				flight.paper_visible=false
+			if active_terminal:
+				if print_camera_tween: print_camera_tween.kill()
+				frame_terminal(active_terminal)
+			elif not event.shift_pressed:
+				flight.alert("Paper pinned beside the next display you use." if paper_pinned else "Paper stowed.")
+		flight_sheet.refresh()
+		return true
+	if code==KEY_DELETE and (paper_pinned if active_terminal else flight.paper_visible or paper_pinned):
+		flight.discard_paper(str(flight.selected_paper))
+		if flight.papers.is_empty(): paper_pinned=false
+		if active_terminal: frame_terminal(active_terminal)
+		flight_sheet.refresh()
+		return true
+	return false
 
 func close_terminal() -> void:
 	if print_camera_tween: print_camera_tween.kill()
@@ -274,17 +308,26 @@ func sync_hardware() -> void:
 	flight.coolant=0.0 if engineering_module.isolated else (0.82 if engineering_module.repaired else 0.70)
 	loading_module.flight_locked=flight.phase!="docked"
 
-func terminal_command(kind: String, value: String) -> String:
+func terminal_command(kind: String, value: String, source: Node=null) -> String:
 	sync_hardware()
 	var words:=value.strip_edges().to_lower().split(" ",false)
 	if words.is_empty(): return ""
+	if words[0]=="display":
+		if words.size()==1: return "DISPLAY ROLES\n"+" / ".join(Terminal.VALID_ROLES)+"\nExample: display NAV"
+		if words.size()!=2 or words[1] not in Terminal.VALID_ROLES: return "Unknown display. Type display for the available roles."
+		var terminal: Node=source if source!=null else active_terminal
+		if terminal==null: return "Use display <role> on the screen you want to change."
+		terminal.set_role(words[1])
+		if active_terminal==terminal: frame_terminal(terminal)
+		return "Display assigned: "+words[1].to_upper()+". Assignment is saved with your flight."
 	if words[0]=="go":
-		if words.size()!=2 or words[1] not in ["chart","nav","checklist","fuel","engine","comms","map","distance"]:
-			return "Use go checklist, chart, nav, engine, comms, fuel, map or distance."
+		if words.size()!=2 or words[1] not in Terminal.VALID_ROLES:
+			return "Use go <role>, or display <role> to assign this screen. Type display to list roles."
 		for terminal in terminals:
 			if terminal.kind==words[1]:
 				open_terminal(terminal)
 				return "Now at "+words[1].to_upper()+"."
+		return "No screen currently assigned to "+words[1].to_upper()+". Use display "+words[1]+" here."
 	if kind=="checklist" and words.size()==2:
 		if words[0]=="hatch" and words[1] in ["open","close"]:
 			if flight.phase!="docked": return "Hatch sealed for flight. Dock first."
@@ -308,9 +351,15 @@ func terminal_command(kind: String, value: String) -> String:
 	if words[0]=="print" and flight_sheet.printing: return "Printer busy. Wait for the sheet to finish feeding."
 	var result: String=flight.command(kind,value)
 	if kind in ["chart","checklist"] and words[0]=="print" and result.contains("PRINTED"):
+		paper_pinned=false
+		flight.paper_visible=false
 		flight_sheet.print_sheet()
+	if words[0]=="paper":
+		paper_pinned=words.size()==2 and words[1]!="hide" and not flight.current_paper().is_empty()
+		flight.paper_visible=false
+	if words[0]=="discard" and flight.papers.is_empty(): paper_pinned=false
 	if words[0] in ["print","paper","discard"] and active_terminal:
-		open_terminal(active_terminal)
+		frame_terminal(active_terminal)
 	if words[0]=="print" and result.contains("PRINTED") and active_terminal:
 		show_printer()
 	_update_flight_world()
@@ -348,6 +397,9 @@ func set_ramp(raised: bool) -> String:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not flight_ready: return
+	if not paused and event is InputEventKey and paper_key(event):
+		get_viewport().set_input_as_handled()
+		return
 	if active_terminal:
 		if event is InputEventKey:
 			if event.pressed and event.keycode==KEY_ESCAPE: close_terminal()
@@ -362,12 +414,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if paused: return
 		if event.physical_keycode==KEY_P:
 			flight.paper_visible=not flight.paper_visible
-			return
-		if flight.paper_visible and event.physical_keycode==KEY_TAB:
-			flight.cycle_paper()
-			return
-		if flight.paper_visible and event.physical_keycode==KEY_DELETE:
-			flight.discard_paper(str(flight.selected_paper))
+			paper_pinned=false
 			return
 		if flight.paper_visible: return
 		if event.physical_keycode==KEY_F:
@@ -420,8 +467,8 @@ func _physics_process(delta: float) -> void:
 	var thrust:=Vector3.ZERO
 	var rotation_input:=Vector3.ZERO
 	var stop:=false
-	if seated and active_terminal==null and not flight.paper_visible and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
-		thrust=Vector3(key(KEY_D)-key(KEY_A),key(KEY_R)-key(KEY_V),key(KEY_S)-key(KEY_W))
+	if seated and active_terminal==null and not flight.paper_visible and not flight.autopilot and not flight.arrival_hold and not flight.auto_docking and (Input.mouse_mode==Input.MOUSE_MODE_CAPTURED or (DisplayServer.get_name()=="headless" and "--flight-test" in OS.get_cmdline_user_args())):
+		thrust=Vector3(key(KEY_D)-key(KEY_A),key(KEY_SPACE)-key(KEY_CTRL),key(KEY_S)-key(KEY_W))
 		rotation_input=Vector3(key(KEY_UP)-key(KEY_DOWN),key(KEY_LEFT)-key(KEY_RIGHT),key(KEY_Q)-key(KEY_E))
 		if Input.is_physical_key_pressed(KEY_SHIFT):
 			thrust*=0.12
@@ -461,19 +508,19 @@ func _process(delta: float) -> void:
 	room_label.text=room_label.text.replace("WALKABLE DESIGN STUDY","K-01 / "+flight.phase.to_upper())
 	var controls: Label=overlay.get_child(1)
 	controls.text="WASD WALK   MOUSE LOOK   F USE   P PAPER   ESC PAUSE"
-	if seated: controls.text="W/S THRUST   A/D STRAFE   R/V LIFT   ARROWS STEER   Q/E ROLL   X STOP SPIN   SHIFT FINE   F USE"
+	if seated: controls.text="W/S THRUST   A/D STRAFE   SPACE/CTRL LIFT   ARROWS STEER   Q/E ROLL   X STOP SPIN   SHIFT FINE   F USE"
 	room_label.visible=active_terminal==null
 	cockpit_hint.visible=active_terminal==null
 	if active_terminal:
 		cockpit_hint.text="%s / TYPE COMMANDS ON THE CRT" % active_terminal.kind.to_upper()
-		controls.text="ENTER RUN   COMMANDS REFERENCE   PAPERS / PAPER <ID> / DISCARD <ID>   GO <TERMINAL>   ESC BACK"
+		controls.text="ENTER RUN   TAB PAPER   SHIFT+TAB NEXT   DELETE RECYCLE   DISPLAY <ROLE>   ESC BACK"
 	else:
 		var target:=aimed_terminal()
 		if target: cockpit_hint.text="[F] USE "+target.kind.to_upper()+" TERMINAL"
 		else:
 			var life:=aimed_life()
 			if not life.is_empty(): cockpit_hint.text="[F] "+life.label
-	if flight.paper_visible and active_terminal==null: controls.text="P STOW PAPER   TAB NEXT SHEET   DELETE RECYCLE   ESC PAUSE"
+	if flight.paper_visible and active_terminal==null: controls.text="P STOW   TAB PIN BESIDE DISPLAY   SHIFT+TAB NEXT   DELETE RECYCLE"
 	if flight.warning_serial!=seen_warning:
 		seen_warning=flight.warning_serial
 		notice_timer=12
@@ -481,7 +528,7 @@ func _process(delta: float) -> void:
 	notice_timer=maxf(0,notice_timer-delta)
 	announcement.text=flight.warning if notice_timer>0 and active_terminal==null else ""
 	if paused: announcement.text="PAUSED / ESC TO RESUME\nProgress autosaves. COMMS: save / load."
-	if flight.sleeping: announcement.text="RESTING / TIME 20x\nNAV handles burns. Wake at station arrival. F to wake early."
+	if flight.sleeping: announcement.text="RESTING / TIME 20x\nWake 90s before arrival braking. NAV stays engaged. F wakes early."
 	for repeater in status_repeaters:
 		repeater.text="%s  /  BURN %.0fs\n%s" % [flight.phase.to_upper(),flight.time_to_burn(),flight.warning if notice_timer>0 else "FOOD %02d  WATER %02d  REST %02d" % [flight.food,flight.water,flight.rest]]
 
@@ -506,6 +553,9 @@ func save_session(path:=SAVE_FILE) -> String:
 		return "Finish moving hardware and secure your carried case before saving."
 	sync_hardware()
 	var data:=flight.snapshot()
+	data["display_roles"]=[]
+	for terminal in terminals: data.display_roles.append(terminal.kind)
+	data["paper_pinned"]=paper_pinned
 	data["rooms"]={"crate_slot":cargo_module.crate_slot,"locked":cargo_module.locked,"repaired":engineering_module.repaired,"isolated":engineering_module.isolated,"cover":engineering_module.cover_open,"fuses":engineering_module.fuse_pattern.duplicate(),"bypass":engineering_module.bypass_ready}
 	var file:=FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file==null: return "Save failed. Previous session preserved."
@@ -527,7 +577,16 @@ func load_session(path:=SAVE_FILE) -> String:
 		if not r[k] is bool: return "Save room state invalid."
 	for v in r.fuses:
 		if not v is bool: return "Save fuse state invalid."
+	var roles: Array=[]
+	if data.has("display_roles"):
+		if not data.display_roles is Array or data.display_roles.size()!=terminals.size(): return "Save display layout invalid."
+		for role in data.display_roles:
+			if not role is String or role not in Terminal.VALID_ROLES: return "Save display role invalid."
+		roles=data.display_roles
+	if data.has("paper_pinned") and not data.paper_pinned is bool: return "Save paper layout invalid."
 	if not flight.restore(data): return "Save invalid; current session preserved."
+	for i in roles.size(): terminals[i].set_role(roles[i])
+	paper_pinned=data.get("paper_pinned",false)
 	ramp_up=flight.ramp_raised
 	ramp_pivot.rotation.x=-PI/2 if ramp_up else atan(1.2/4.2)
 	ramp_fold.rotation.x=PI if ramp_up else 0
@@ -557,6 +616,8 @@ func _run_flight_tests() -> void:
 	var ok: bool=await suite.run(self)
 	var paper_suite=load("res://scripts/longhaul_flight_guidance_test.gd").new()
 	ok=(await paper_suite.run(self)) and ok
+	var display_suite=load("res://scripts/longhaul_display_test.gd").new()
+	ok=(await display_suite.run(self)) and ok
 
 	print("LONGHAUL FLIGHT ","PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
@@ -571,6 +632,7 @@ func _capture_flight() -> void:
 		terminal_command("engine","starboard on")
 		terminal_command("chart","plot tharsis direct")
 		terminal_command("checklist" if mode=="checklist-paper" else "chart","print")
+		paper_pinned=true
 		open_terminal(terminals[2] if mode=="checklist-paper" else terminals[1])
 		terminals[1].submit("status")
 	elif mode=="printer":
@@ -583,7 +645,7 @@ func _capture_flight() -> void:
 		get_tree().quit()
 		return
 	elif mode!="pilot":
-		if mode in ["map","distance"]:
+		if mode in ["map","distance","velocity","radar"]:
 			flight.command("engine","port on")
 			flight.command("engine","starboard on")
 			flight.plan_route("tharsis")
@@ -594,6 +656,12 @@ func _capture_flight() -> void:
 			flight.phase="injection"
 			flight.engage_navigation()
 			for i in 120: flight.tick(1)
+			if mode in ["radar","velocity"]:
+				flight.release_controls()
+				flight.phase="approach"
+				flight.ship_position=flight.station_position(flight.destination,flight.elapsed)+Vector3(-18,-9,480)
+				flight.velocity=flight.station_velocity(flight.destination,flight.elapsed)+Vector3(1.2,-0.4,-6)
+				flight.attitude=Basis.IDENTITY
 		for terminal in terminals:
 			if terminal.kind==mode:
 				open_terminal(terminal)

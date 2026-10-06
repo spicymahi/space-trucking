@@ -16,6 +16,14 @@ func screen_rect(host, mesh: MeshInstance3D) -> Rect2:
 	for point in points: result=result.expand(point)
 	return result
 
+func press(host, code: Key, shift:=false) -> void:
+	var event:=InputEventKey.new()
+	event.physical_keycode=code
+	event.keycode=code
+	event.pressed=true
+	event.shift_pressed=shift
+	host._unhandled_input(event)
+
 func run(host) -> bool:
 	var s=State.new()
 	check(s.command("nav","help")==s.command_reference("nav") and not s.command("nav","help").contains("NEXT STEP"),"Help is static reference, not a next-step guide")
@@ -72,7 +80,14 @@ func run(host) -> bool:
 	check(host.flight_sheet.progress>0 and host.flight_sheet.progress<1 and host.flight_sheet.feed.scale==Vector3.ONE,"Printing translates rigid paper through slot without scaling")
 	await host.get_tree().create_timer(1.8).timeout
 	host.flight_sheet.refresh()
-	check(not host.flight_sheet.printing and host.flight_sheet.held.visible,"Completed print becomes readable copy")
+	check(not host.flight_sheet.printing and not host.flight_sheet.feed.visible,"Collected print leaves the tray empty")
+	check(not host.flight_sheet.held.visible,"Collected sheet waits in rack until pinned")
+	host.active_terminal.entry="port "
+	press(host,KEY_TAB)
+	check(host.paper_pinned and host.flight_sheet.held.visible and host.active_terminal.entry=="port ","Tab pins paper without altering CLI input")
+	press(host,KEY_TAB)
+	check(not host.paper_pinned and not host.flight_sheet.held.visible,"Tab stows paper without CLI command")
+	press(host,KEY_TAB)
 	var body: Label=host.flight_sheet.body
 	check(body.position.y+body.get_minimum_size().y<=1280,"Entire checklist fits printed page")
 	print("PAGE HEIGHT ",body.get_minimum_size()," at ",body.position)
@@ -85,6 +100,7 @@ func run(host) -> bool:
 	host.active_terminal.submit("print")
 	await host.get_tree().create_timer(2.4).timeout
 	host.terminal_command("chart","go nav")
+	press(host,KEY_TAB)
 	host.flight_sheet.refresh()
 	await host._frames(4)
 	check(host.flight_sheet.body.position.y+host.flight_sheet.body.get_minimum_size().y<=1280,"Entire route and command text fit printed page")
@@ -99,30 +115,122 @@ func run(host) -> bool:
 	for line in ["coords "+host.flight.coords_text(),"burn 6","reserve 200","load"]: host.active_terminal.submit(line)
 	check(host.flight.loaded,"Commands from physical printed sheet load NAV")
 	var distance_terminal=null
-	var map_terminal=null
+	var velocity_terminal=null
+	var radar_terminal=null
 	for terminal in host.terminals:
 		if terminal.kind=="distance": distance_terminal=terminal
-		if terminal.kind=="map": map_terminal=terminal
+		if terminal.kind=="velocity": velocity_terminal=terminal
+		if terminal.kind=="radar": radar_terminal=terminal
 	distance_terminal.refresh()
 	check(distance_terminal.panel.position.x>0 and distance_terminal.panel.position.y>2 and distance_terminal.readout.text.contains("THARSIS"),"Upper-right meter displays selected station distance")
-	check(map_terminal.panel.position.x==0 and map_terminal.panel.position.y>2 and map_terminal.chart_map!=null,"Live map occupies upper-middle screen")
+	check(velocity_terminal.panel.position.x==0 and velocity_terminal.panel.position.y>2,"Relative velocity occupies upper-middle screen")
+	check(radar_terminal.panel.position.x<0 and radar_terminal.panel.position.y>2,"Station radar occupies upper-left screen")
+	check(host.terminals[0].kind=="chart" and host.terminals[0].chart_map!=null,"Journey map remains in lower-left CHART")
 	host.flight.nav_selected=false
 	distance_terminal.refresh()
 	check(distance_terminal.readout.text.is_empty(),"Distance value is hidden without NAV destination")
 	host.close_terminal()
 	check(host.camera.transform.is_equal_approx(camera_before),"Visiting several terminals and printer restores seat view")
+	press(host,KEY_P)
 	host.flight_sheet.refresh()
 	await host._frames(2)
 	check(view.encloses(screen_rect(host,host.flight_sheet.held)),"Full-page paper reader fits viewport")
-	var event:=InputEventKey.new()
-	event.physical_keycode=KEY_DELETE
-	event.keycode=KEY_DELETE
-	event.pressed=true
-	host._unhandled_input(event)
+	press(host,KEY_DELETE)
 	check(host.flight.papers.size()==1,"Delete recycles held route sheet")
-	event.physical_keycode=KEY_P
-	event.keycode=KEY_P
-	host._unhandled_input(event)
+	press(host,KEY_P)
 	check(not host.flight.paper_visible,"P stows paper to clear view")
+	# Display assignment targets the exact physical screen, even with duplicate roles.
+	var target=host.terminals[6]
+	host.open_terminal(target)
+	target.submit("display NAV")
+	check(target.kind=="nav" and host.terminals[1].kind=="nav","Case-insensitive display NAV remaps selected screen only")
+	target.submit("display RADAR")
+	check(target.kind=="radar" and host.terminals[5].kind=="radar","Duplicate roles are allowed")
+	target.submit("display bogus")
+	check(target.kind=="radar" and target.readout.text.contains("Unknown display"),"Bad display name is visible and preserves role")
+	press(host,KEY_TAB)
+	await host._frames(2)
+	check(host.flight_sheet.held.visible,"Paper can be pinned at overhead radar too")
+	var overhead_rect:=screen_rect(host,target.panel.get_meta("screen_mesh"))
+	paper_rect=screen_rect(host,host.flight_sheet.held)
+	check(view.encloses(overhead_rect) and view.encloses(paper_rect) and not paper_rect.intersects(overhead_rect),"Paper and reassigned overhead screen fit together")
+	check(host.save_session("/tmp/longhaul-display-layout-test.json").contains("saved"),"Screen assignments save with flight")
+	target.set_role("fuel")
+	host.paper_pinned=false
+	check(host.load_session("/tmp/longhaul-display-layout-test.json").contains("restored") and target.kind=="radar" and host.paper_pinned,"Screen assignments and paper pin restore")
+	var stored=JSON.parse_string(FileAccess.get_file_as_string("/tmp/longhaul-display-layout-test.json"))
+	stored.display_roles[0]="invalid"
+	var file:=FileAccess.open("/tmp/longhaul-display-layout-bad.json",FileAccess.WRITE)
+	file.store_string(JSON.stringify(stored))
+	file.close()
+	check(host.load_session("/tmp/longhaul-display-layout-bad.json").contains("invalid") and target.kind=="radar","Malformed display layout does not mutate live state")
+	# Real keyboard events drive vertical flight using Space and Control.
+	host.paper_pinned=false
+	host.flight.paper_visible=false
+	host.flight=State.new()
+	host.flight.command("engine","port on")
+	host.flight.command("engine","starboard on")
+	host.flight.phase="departure"
+	host._take_seat()
+	host.test_running=false
+	Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
+	var input:=InputEventKey.new()
+	input.keycode=KEY_SPACE
+	input.physical_keycode=KEY_SPACE
+	input.pressed=true
+	Input.parse_input_event(input)
+	Input.flush_buffered_events()
+	host._physics_process(0.2)
+	check(host.flight.acceleration.y>1,"Space applies upward thrust in manual flight")
+	input=input.duplicate()
+	input.pressed=false
+	Input.parse_input_event(input)
+	Input.flush_buffered_events()
+	input=InputEventKey.new()
+	input.keycode=KEY_CTRL
+	input.physical_keycode=KEY_CTRL
+	input.pressed=true
+	Input.parse_input_event(input)
+	Input.flush_buffered_events()
+	host._physics_process(0.2)
+	check(host.flight.acceleration.y < -1,"Control applies downward thrust in manual flight")
+	input=input.duplicate()
+	input.pressed=false
+	Input.parse_input_event(input)
+	Input.flush_buffered_events()
+	host.test_running=true
+	# Reproduce returning to the chair with a walking key still held, then standing again.
+	host.flight.phase="docked"
+	host.flight.plan_route("tharsis")
+	host.flight.entered_coords=host.flight.plan.target
+	host.flight.entered_burn=6
+	host.flight.entered_reserve=200
+	host.flight.load_route()
+	host.flight.phase="departure"
+	host.flight.ship_position=host.flight.station_position(0,host.flight.elapsed)+Vector3(0,0,-500)
+	host.flight.engage_navigation()
+	host.camera.rotation=Vector3(-1,0,0)
+	press(host,KEY_F)
+	check(not host.seated and host.flight.autopilot,"Standing from pilot seat keeps NAV engaged")
+	host.camera.rotation=Vector3(-1,0,0)
+	press(host,KEY_F)
+	check(host.seated and host.flight.autopilot,"Returning to pilot seat keeps NAV engaged")
+	input=InputEventKey.new()
+	input.keycode=KEY_W
+	input.physical_keycode=KEY_W
+	input.pressed=true
+	Input.parse_input_event(input)
+	Input.flush_buffered_events()
+	host.test_running=false
+	host._physics_process(0.2)
+	host.test_running=true
+	check(host.flight.autopilot,"Held movement key after sitting cannot cancel NAV")
+	input=input.duplicate()
+	input.pressed=false
+	Input.parse_input_event(input)
+	Input.flush_buffered_events()
+	host.camera.rotation=Vector3(-1,0,0)
+	press(host,KEY_F)
+	check(not host.seated and host.flight.autopilot,"Pilot can stand again without entering engage twice")
 	print("LONGHAUL PAPER CHECKS ",passed," passed / ",failed," failed")
 	return failed==0

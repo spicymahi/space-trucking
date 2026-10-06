@@ -102,9 +102,9 @@ func paper_quad(size: Vector2, material: Material, parent: Node3D) -> MeshInstan
 
 func paper_text(sheet: Dictionary) -> String:
 	if sheet.kind=="checklist":
-		return "DEPARTURE / COMMAND REFERENCE\n\n01 ENGINE / right arm\n   port on\n   starboard on\n02 CHART / forward left\n   stations\n   plot <station> direct\n   print\n03 NAV / forward middle\n   Copy the commands on your ROUTE sheet.\n04 COMMS / left arm\n   request\n   code <code returned by ATC>\n05 CHECKLIST / forward right\n   hatch close  (wait for sealed)\n   ramp raise   (wait for raised)\n   status       (all items must be OK)\n   Secure cargo clamps in the hold.\n06 COMMS: depart\n   Fly forward past the 300 m lights.\n07 NAV: engage\n   Safe to stand. Sleep wakes at arrival.\n08 COMMS: approach\n   Fly manually, or: autodock\n   Assistance: <1000 m / <15 m/s.\n   Manual: <20 m / <2 m/s; dock\n\nP read/stow / TAB next / DELETE discard"
+		return "DEPARTURE / COMMAND REFERENCE\n\n01 ENGINE / right arm\n   port on\n   starboard on\n02 CHART / forward left\n   stations\n   plot <station> direct\n   print\n03 NAV / forward middle\n   Copy the commands on your ROUTE sheet.\n04 COMMS / left arm\n   request\n   code <code returned by ATC>\n05 CHECKLIST / forward right\n   hatch close  (wait for sealed)\n   ramp raise   (wait for raised)\n   status       (all items must be OK)\n   Secure cargo clamps in the hold.\n06 COMMS: depart\n   Fly forward past the 300 m lights.\n07 NAV: engage\n   NAV stays engaged. Sleep wakes early.\n08 COMMS: approach\n   manual to fly, or: auto dock\n   Assistance: <1000 m / <15 m/s.\n   Manual: <20 m / <2 m/s; dock\n\nTAB pin / SHIFT+TAB next / DEL discard"
 	var t: Dictionary=sheet.data
-	return "FLIGHT ORDER %03d / %s\nTO %s\n\nTYPE AT THE MIDDLE NAV COMPUTER\nOne command per line; Enter to run.\n\ncoords %s\nburn %.2f\nreserve %.0f\nload\n\n--------------------------------\nCoordinates in kilometres.\nKeep all numbers and minus signs.\n\nTRIP FUEL   %.0f kg\nSPARE FUEL  %.0f kg\nSpare covers docking / corrections.\n\nTRANSFER ~%.0f min + approach\n\nAfter clearing the station:\nNAV: engage\n\nP read/stow / TAB next / DEL recycle" % [t.revision,str(t.style).to_upper(),str(t.station).to_upper(),t.coords,t.burn,t.reserve,t.fuel,t.reserve,(t.coast+120)/60]
+	return "FLIGHT ORDER %03d / %s\nTO %s\n\nTYPE AT THE MIDDLE NAV COMPUTER\nOne command per line; Enter to run.\n\ncoords %s\nburn %.2f\nreserve %.0f\nload\n\n--------------------------------\nCoordinates in kilometres.\nKeep all numbers and minus signs.\n\nTRIP FUEL   %.0f kg\nSPARE FUEL  %.0f kg\nSpare covers docking / corrections.\n\nTRANSFER ~%.0f min + approach\n\nAfter clearing the station:\nNAV: engage\n\nTAB pin / SHIFT+TAB next / DEL recycle" % [t.revision,str(t.style).to_upper(),str(t.station).to_upper(),t.coords,t.burn,t.reserve,t.fuel,t.reserve,(t.coast+120)/60]
 
 func set_page_body(label: Label, sheet: Dictionary) -> void:
 	var page: SubViewport=label.get_parent()
@@ -123,7 +123,7 @@ func set_page_body(label: Label, sheet: Dictionary) -> void:
 			command_size-=1
 			commands.add_theme_font_size_override("font_size",command_size)
 		details.add_theme_font_size_override("font_size",38)
-		details.text="Coordinates in km. Keep minus signs.\nBurn rate in kg per second.\n\nTRIP FUEL:  %.0f kg\nSPARE FUEL: %.0f kg\nSpare covers docking and corrections.\nTRANSFER: ~%.0f min + approach\n\nAfter clearing the station: NAV engage\n\nP read/stow / TAB next / DEL recycle" % [t.fuel,t.reserve,(t.coast+120)/60]
+		details.text="Coordinates in km. Keep minus signs.\nBurn rate in kg per second.\n\nTRIP FUEL:  %.0f kg\nSPARE FUEL: %.0f kg\nSpare covers docking and corrections.\nTRANSFER: ~%.0f min + approach\n\nAfter clearing the station: NAV engage\n\nTAB pin / SHIFT+TAB next / DEL recycle" % [t.fuel,t.reserve,(t.coast+120)/60]
 		return
 	label.text=paper_text(sheet)
 	var font_size:=37
@@ -148,7 +148,9 @@ func print_sheet() -> void:
 		feed_tween.tween_method(set_feed,float(step-1)/24,float(step)/24,0.055)
 		feed_tween.tween_interval(0.025)
 	feed_tween.tween_method(set_feed,1.0,1.10,0.18)
-	feed_tween.tween_callback(func(): printing=false)
+	feed_tween.tween_callback(func():
+		printing=false
+		feed.visible=false)
 	play_printer()
 
 func set_feed(value: float) -> void:
@@ -182,8 +184,8 @@ func refresh(_animate:=false) -> void:
 		if not sheet.is_empty():
 			heading.text="LONGHAUL / SHEET %02d" % sheet.number
 			set_page_body(body,sheet)
-	if not host.flight.papers.any(func(p): return int(p.number)==feed_paper_id): feed.visible=false
-	held.visible=host.flight.paper_visible and not sheet.is_empty() and not printing and (host.active_terminal==null or host.active_terminal.kind not in ["map","distance","fuel"])
+	if not printing or not host.flight.papers.any(func(p): return int(p.number)==feed_paper_id): feed.visible=false
+	held.visible=(host.paper_pinned if host.active_terminal else host.flight.paper_visible) and not sheet.is_empty() and not printing
 	if host.active_terminal:
 		held.mesh.size=Vector2(0.122,0.170)
 		held.position=Vector3(0.122,-0.002,-0.32)

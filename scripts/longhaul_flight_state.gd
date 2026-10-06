@@ -7,7 +7,7 @@ const EXHAUST := 30000.0
 const DRY_MASS := 18000.0
 const CAPACITY := 3000.0
 const RESERVE := 200.0
-const WARNING_TIME := 75.0
+const WARNING_TIME := 90.0
 const IDS := ["ceres", "tharsis", "kepler", "helios"]
 const NAMES := ["Ceres Yard", "Tharsis Ring", "Kepler Depot", "Helios Anchorage"]
 const ORIGINS := [Vector3(0,0,0), Vector3(60000,0,-80000), Vector3(-140000,15000,-260000), Vector3(360000,-15000,-520000)]
@@ -129,6 +129,7 @@ func plan_route(id: String, style := "direct") -> String:
 	if style not in ["direct","economy"]: return "Use plot <station> direct|economy."
 	if phase == "docked" and index == dock_id: return "Already docked there. Choose another station."
 	if phase in ["coast","brake","approach"]: return "Use NAV recalc to replace an active transfer."
+	if destination!=index: approach_clearance=false
 	destination = index
 	nav_selected = false
 	route_serial += 1
@@ -231,14 +232,21 @@ func guidance() -> Dictionary:
 func set_warp(value: float) -> String:
 	if value not in [1.0,5.0,20.0]: return "Use warp 1, 5 or 20."
 	if value>1 and (not autopilot or phase not in ["injection","coast","brake"]): return "Fast time requires NAV automatic transfer."
+	if value>1 and time_to_burn()<=WARNING_TIME+0.000001:
+		warp=1
+		sleeping=false
+		return "Arrival watch has begun. Stay awake; NAV remains engaged at normal time."
 	warp=value
-	return "Time rate %dx. Normal time resumes at station arrival." % int(warp)
+	return "Time rate %dx. Normal time resumes 90 seconds before arrival braking." % int(warp)
+
+func arrival_wake_in() -> float:
+	return maxf(0,time_to_burn()-WARNING_TIME)
 
 func sleep_until_warning() -> String:
 	var result:=set_warp(20)
 	if warp==20:
 		sleeping=true
-		return "Resting. NAV handles burns and wakes you at station arrival."
+		return "Resting. NAV wakes you 90 seconds before arrival braking and stays engaged."
 	return result
 
 func recalculate() -> String:
@@ -257,23 +265,43 @@ func recalculate() -> String:
 
 func tick(delta: float, thrust := Vector3.ZERO, rotation_input := Vector3.ZERO, stop_rotation := false) -> void:
 	if phase=="docked": return
-	if thrust.length()>0 or rotation_input.length()>0:
-		if autopilot or auto_docking or arrival_hold: release_controls()
+	# Walking, returning to the chair and accidental control keys never cancel NAV.
+	# Only the explicit manual command (or a propulsion fault) releases control.
+	if autopilot or auto_docking or arrival_hold:
+		thrust=Vector3.ZERO
+		rotation_input=Vector3.ZERO
+		stop_rotation=false
+	elif thrust.length()>0 or rotation_input.length()>0:
 		warp=1
 		sleeping=false
-	var dt:=delta*warp
-	var count:=maxi(1,ceili(dt/0.2))
+	if autopilot and phase in ["injection","coast","brake"] and time_to_burn()<=WARNING_TIME+0.000001 and (sleeping or warp>1):
+		wake_for_arrival()
+	var remaining:=delta*warp
 	var simulated:=0.0
-	var was_sleeping:=sleeping
-	for i in count:
+	var rested:=0.0
+	while remaining>0.000001:
+		var dt:=minf(0.2,remaining)
+		var was_sleeping:=sleeping
+		var was_accelerated:=warp>1
+		if autopilot and (not notified or sleeping or warp>1) and phase in ["injection","coast","brake"] and arrival_wake_in()>0.000001:
+			dt=minf(dt,arrival_wake_in())
 		var old_phase:=phase
-		_step(dt/count,thrust,rotation_input,stop_rotation)
-		simulated+=dt/count
-		if (old_phase!="approach" and phase=="approach") or phase=="docked": break
+		_step(dt,thrust,rotation_input,stop_rotation)
+		simulated+=dt
+		rested+=dt*(0.10 if was_sleeping else -0.008)
+		remaining-=dt
+		# Discard accelerated frame time after waking: never carry it across the alarm.
+		if (was_accelerated and warp==1) or (old_phase!="approach" and phase=="approach") or phase=="docked": break
 	food=maxf(0,food-simulated*0.009)
 	water=maxf(0,water-simulated*0.014)
 	hygiene=maxf(0,hygiene-simulated*0.007)
-	rest=clampf(rest+simulated*(0.10 if was_sleeping else -0.008),0,100)
+	rest=clampf(rest+rested,0,100)
+
+func wake_for_arrival() -> void:
+	warp=1
+	sleeping=false
+	notified=true
+	alert("Arrival watch: braking begins in 90 seconds. You are awake; NAV remains engaged. Return to the cockpit when ready.")
 
 func _step(dt: float, thrust: Vector3, rotation_input: Vector3, stop_rotation: bool) -> void:
 	if (autopilot or auto_docking or arrival_hold) and (not engines[0] or not engines[1] or coolant<=0 or fuel<=0):
@@ -305,9 +333,8 @@ func _step(dt: float, thrust: Vector3, rotation_input: Vector3, stop_rotation: b
 		if phase in ["injection","coast"]:
 			if phase=="injection" and (required_velocity-velocity).length()<1.5:
 				phase="coast"
-			if time_to_burn()<=WARNING_TIME and not notified:
-				notified=true
-				alert("Arrival braking in 75 seconds. NAV will perform the maneuver.")
+			if time_to_burn()<=WARNING_TIME+0.000001 and (not notified or sleeping or warp>1):
+				wake_for_arrival()
 			if time_to_burn()<=0:
 				phase="brake"
 				alert("NAV performing arrival braking. Station approach follows.")
@@ -315,21 +342,20 @@ func _step(dt: float, thrust: Vector3, rotation_input: Vector3, stop_rotation: b
 			var error:=ship_position.distance_to(station_position(destination,elapsed)+hold_offset)
 			if error<8 and relative_speed()<0.5:
 				phase="approach"
-				autopilot=false
 				arrival_hold=true
 				warp=1
 				sleeping=false
-				alert("Station arrival. Holding 600 m from the berth. Return when ready; manual approach or COMMS autodock.")
+				alert("Station arrival. NAV remains engaged, holding 600 m from the berth. Type approach for berth K-01, then auto dock; or manual to fly yourself.")
 	if auto_docking and station_range()<12 and relative_speed()<0.5:
 		if (-attitude.z).dot(Vector3.FORWARD)>cos(deg_to_rad(5)):
 			dock()
 
 func dock() -> String:
-	if phase not in ["approach","brake"]: return "Finish the transfer before docking."
-	if not approach_clearance: return "COMMS: approach to request a berth."
+	if phase=="docked": return "Already docked at %s / berth K-01." % NAMES[dock_id]
+	if not approach_clearance: return "Type approach on NAV or COMMS to receive berth K-01 automatically."
 	var d := ship_position.distance_to(station_position(destination,elapsed))
 	var s := (velocity-station_velocity(destination,elapsed)).length()
-	if d>20 or s>2: return "Berth capture requires <20m and <2m/s relative. Now %.0fm / %.1fm/s." % [d,s]
+	if d>20 or s>2: return "Berth K-01 capture needs <20 m / <2 m/s. Now %.0f m / %.1f m/s.\nUse auto dock within 1000 m / 15 m/s, or manual to fly closer." % [d,s]
 	if (-attitude.z).dot(Vector3.FORWARD)<cos(deg_to_rad(8)) or angular_velocity.length()>0.02: return "Align berth heading 000 / pitch 000 and stop rotation [X]."
 	dock_id=destination
 	autopilot=false
@@ -370,6 +396,14 @@ func command(terminal: String, line: String) -> String:
 	var words := line.strip_edges().to_lower().split(" ",false)
 	if words.is_empty(): return ""
 	var op := words[0]
+	if op=="manual":
+		release_controls()
+		return "Manual controls. NAV disengaged; momentum is preserved. Type engage at NAV to resume."
+	if terminal in ["nav","comms"]:
+		if op=="approach": return request_approach()
+		if op=="dock": return dock()
+		if op in ["autodock","auto-dock"] or (op=="auto" and words.size()==2 and words[1]=="dock"):
+			return engage_docking()
 	if op=="papers": return paper_list()
 	if op=="paper" and words.size()==2:
 		if words[1]=="hide":
@@ -405,9 +439,6 @@ func command(terminal: String, line: String) -> String:
 			if op=="load": return load_route()
 			if op=="recalc": return recalculate()
 			if op=="engage": return engage_navigation()
-			if op=="manual":
-				release_controls()
-				return "Manual controls. Momentum is preserved."
 			if op=="warp" and words.size()==2 and valid_number(words[1]): return set_warp(float(words[1]))
 		"checklist":
 			if op=="print": return print_checklist()
@@ -425,12 +456,6 @@ func command(terminal: String, line: String) -> String:
 				clearance_confirmed=not clearance.is_empty() and words[1].to_upper()==clearance
 				return "ATC readback accepted. Clearance remains valid." if clearance_confirmed else "Incorrect code. COMMS: request"
 			if op=="depart": return depart()
-			if op=="approach":
-				if phase not in ["brake","approach"]: return "Request a berth during arrival."
-				approach_clearance=true
-				return "Berth K-01 reserved. Capture <20m, <2m/s. Heading 000 / pitch 000. No hurry."
-			if op=="dock": return dock()
-			if op=="autodock": return engage_docking()
 			if op=="rescue": return rescue()
 			if op=="refuel":
 				if phase!="docked": return "Refuel at a station; rescue is available."
@@ -458,15 +483,15 @@ func station_directory() -> String:
 func command_reference(terminal: String) -> String:
 	var reference: String={
 		"chart":"stations | plot <station> direct|economy\nroute | print | map",
-		"nav":"coords <x> <y> <z>  (km)\nburn <kg/s> | reserve <kg> | load\nengage | manual | recalc | warp 1|5|20\nstations | status",
+		"nav":"coords <x> <y> <z>  (km)\nburn <kg/s> | reserve <kg> | load\nengage | manual | recalc | warp 1|5|20\napproach | auto dock | dock\nstations | status",
 		"checklist":"status | print\nhatch close|open | ramp raise|lower\nPhysical cargo clamps must also be secured.",
 		"fuel":"status  (fuel and spare-fuel monitor)",
 		"engine":"port on|off\nstarboard on|off\nstatus  (live engine diagram)",
-		"comms":"request | code <takeoff-code> | depart\napproach | dock | autodock\nrefuel | service | rescue | save | load",
+		"comms":"request | code <takeoff-code> | depart\napproach (assign berth K-01) | auto dock | dock\nrefuel | service | rescue | save | load",
 		"map":"Live journey map / automatic approach zoom",
 		"distance":"Distance to the destination loaded at NAV"
 	}.get(terminal,"")
-	return reference+"\n\npapers | paper <id>|hide | discard <id>|all\ngo <terminal> | clear | help"
+	return reference+"\n\nTab: pin/stow paper | Shift+Tab: next sheet\nDelete: discard sheet | P: read outside CLI\ngo <terminal> | display <role> | manual | clear | help"
 
 func status(terminal: String) -> String:
 	match terminal:
@@ -479,7 +504,7 @@ func status(terminal: String) -> String:
 	if phase=="departure": return "MANUAL DEPARTURE\nSTATION RANGE %.0f m\nRELATIVE SPEED %.1f m/s\nCLEARANCE: %s\n\n%s" % [ship_position.distance_to(station_position(dock_id,elapsed)),(velocity-station_velocity(dock_id,elapsed)).length(),"CLEAR" if safe_departure() else "INSIDE STATION ZONE","SAFE TO ENGAGE NAVIGATION" if safe_departure() else "FOLLOW GREEN CORRIDOR / 300 m"]
 	if phase=="approach":
 		var g:=guidance()
-		return "%s\nRANGE %.0f m / REL SPEED %.1f m/s\nYAW %+.1f / PITCH %+.1f\nBERTH CAPTURE <20 m / <2 m/s\nAUTODOCK <1000 m / <15 m/s\n%s" % ["AUTODOCK" if auto_docking else ("ARRIVAL HOLD" if arrival_hold else "MANUAL APPROACH"),station_range(),relative_speed(),g.yaw,g.pitch,"TAKE CONTROLS WHEN READY" if arrival_hold else "BERTH HEADING 000 / X STOPS SPIN"]
+		return "%s\nRANGE %.0f m / REL SPEED %.1f m/s\nYAW %+.1f / PITCH %+.1f\nBERTH K-01: %s\n%s\nMANUAL: disengage NAV to fly yourself" % ["NAV / AUTO DOCK" if auto_docking else ("NAV / ARRIVAL HOLD" if arrival_hold else "MANUAL APPROACH"),station_range(),relative_speed(),g.yaw,g.pitch,"ASSIGNED" if approach_clearance else "TYPE approach TO REQUEST","auto dock: assistance within 1000 m / 15 m/s" if approach_clearance else "approach assigns your berth automatically"]
 	return "%s / %s\n%s\nARRIVAL BRAKING IN %.0f s\nDESTINATION RANGE %.1f km\nTIME %dx / FUEL %.0f kg\n%s" % [NAMES[destination],phase.to_upper(),"NAV AUTOMATIC TRANSFER" if autopilot else "MANUAL / NAV DISENGAGED",time_to_burn(),station_range()/1000,int(warp),fuel,"SAFE TO LEAVE CONTROLS" if autopilot else "NAV engage TO RESUME"]
 
 func snapshot() -> Dictionary:
@@ -501,7 +526,7 @@ func snapshot() -> Dictionary:
 		for key in ["target","velocity"]:
 			var v: Vector3=plan[key]
 			result.plan[key]=[v.x,v.y,v.z]
-	result["flight_revision"]=2
+	result["flight_revision"]=3
 	return result
 
 func restore(data: Dictionary) -> bool:
@@ -515,7 +540,9 @@ func restore(data: Dictionary) -> bool:
 	if not data.has("flight_revision"):
 		data.engines=[data.get("engine_on",false),data.get("engine_on",false)]
 		data.nav_selected=data.get("loaded",false)
-	data.flight_revision=2
+	# Previous builds treated hold / docking as NAV being off. They are engaged modes.
+	if data.arrival_hold or data.auto_docking: data.autopilot=true
+	data.flight_revision=3
 	for key in defaults:
 		if not data.has(key): return false
 	# Validate into a candidate before changing the live model.
@@ -549,7 +576,8 @@ func restore(data: Dictionary) -> bool:
 		if not point is Array or point.size()!=3: return false
 		for v in point:
 			if not (v is int or v is float) or not is_finite(float(v)): return false
-	if data.autopilot and (not data.loaded or data.phase not in ["injection","coast","brake"]): return false
+	if data.autopilot and (not data.loaded or data.phase not in ["injection","coast","brake","approach"]): return false
+	if data.autopilot and data.phase=="approach" and not (data.auto_docking or data.arrival_hold): return false
 	if (data.auto_docking or data.arrival_hold) and data.phase!="approach": return false
 	if data.auto_docking and not data.approach_clearance: return false
 	if not data.printed_route is Dictionary or not valid_paper(data.printed_route): return false
@@ -625,18 +653,36 @@ func station_range() -> float:
 func relative_speed() -> float:
 	return (velocity-station_velocity(destination,elapsed)).length()
 
+func reference_station_id() -> int:
+	return dock_id if phase in ["docked","departure"] else destination
+
+func relative_velocity_local() -> Vector3:
+	# Godot ship-body axes: +X right, +Y up, +Z backward (-Z forward).
+	return attitude.inverse()*(velocity-station_velocity(reference_station_id(),elapsed))
+
+func station_offset_local() -> Vector3:
+	return attitude.inverse()*(station_position(reference_station_id(),elapsed)-ship_position)
+
 func safe_departure() -> bool:
 	var relative:=ship_position-station_position(dock_id,elapsed)
 	return (relative.z < -300 and absf(relative.x)<500 and absf(relative.y)<500) or relative.length()>1000
 
 func engage_navigation() -> String:
 	if phase=="docked": return "Docked. Fly out through the departure corridor first."
-	if phase=="approach": return "At destination. Use manual approach or COMMS autodock."
 	if not loaded: return "No validated route loaded."
-	if autopilot: return "NAV already engaged. Safe to leave controls."
+	if autopilot: return "NAV already engaged%s. Safe to leave controls. Only manual releases control." % (" / station hold" if arrival_hold else "")
 	if phase=="departure" and not safe_departure(): return "Inside station zone. Clear the green corridor beyond 300 m."
 	if not engines[0] or not engines[1] or coolant<=0: return "NAV requires both engines and available coolant."
 	if fuel<RESERVE+30: return "Insufficient maneuver fuel. COMMS rescue available."
+	if phase=="approach" or station_range()<1000:
+		autopilot=true
+		auto_docking=false
+		arrival_hold=true
+		phase="approach"
+		warp=1
+		sleeping=false
+		alert("NAV station hold engaged at the 600 m waiting point. Type approach for berth K-01, then auto dock.")
+		return warning
 	# Rebase the planned intercept to departure time. Coordinates are still entered manually;
 	# station motion and delayed launches are handled by the navigation computer.
 	var old_eta: float=plan.eta
@@ -660,15 +706,28 @@ func release_controls() -> void:
 	warp=1
 	sleeping=false
 
+func request_approach() -> String:
+	if phase=="docked": return "Already docked at %s / berth K-01. Use request for a takeoff code." % NAMES[dock_id]
+	if not nav_selected and not loaded: return "No arrival station selected. Plot at CHART and load the coordinates at NAV."
+	approach_clearance=true
+	# A manual or older saved flight may be beside the station in an earlier phase.
+	# Recognize the physical approach without taking control from an engaged NAV.
+	if not autopilot and not auto_docking and not arrival_hold and station_range()<=5000:
+		phase="approach"
+	return "ATC / %s\nBERTH K-01 AUTOMATICALLY ASSIGNED / CLEARANCE CONFIRMED\nType auto dock within 1000 m and below 15 m/s.\nOr manual, then dock within 20 m / 2 m/s, heading 000 / pitch 000.\nNo berth selection command is needed; clearance has no expiry." % NAMES[destination]
+
 func engage_docking() -> String:
-	if phase!="approach": return "Docking assistance is available during station approach."
-	if not approach_clearance: return "Request arrival clearance with COMMS approach."
-	if station_range()>1000 or relative_speed()>15: return "Autodock requires <1000 m and <15 m/s relative."
+	if phase=="docked": return "Already docked at %s / berth K-01." % NAMES[dock_id]
+	if not approach_clearance: return "Arrival clearance required. Type approach on NAV or COMMS; berth K-01 is assigned automatically. Then type auto dock."
+	if station_range()>1000 or relative_speed()>15: return "Berth K-01 is assigned. Auto dock needs <1000 m / <15 m/s; now %.0f m / %.1f m/s.\nWait for NAV station hold, or use manual to approach and brake. Then type auto dock again." % [station_range(),relative_speed()]
 	if not engines[0] or not engines[1] or coolant<=0 or fuel<20: return "Autodock requires both engines, coolant and 20 kg fuel."
+	phase="approach"
+	autopilot=true
 	arrival_hold=false
 	auto_docking=true
 	warp=1
-	alert("Docking assistance engaged. Manual thrust cancels assistance.")
+	sleeping=false
+	alert("NAV auto dock engaged for berth K-01. Safe to leave controls; only the manual command cancels assistance.")
 	return warning
 
 func automatic_thrust(dt: float) -> Vector3:
@@ -711,7 +770,7 @@ func add_paper(kind: String, payload: Dictionary) -> String:
 	papers.append({"number":paper_serial,"kind":kind,"data":payload.duplicate(true)})
 	selected_paper=paper_serial
 	paper_visible=true
-	return "SHEET %02d PRINTED / %s\nPaper retained in the cockpit rack.\npapers: list sheets | paper <id>: read\ndiscard <id>: recycle a sheet\nOutside terminals: P read/stow, Tab next, Delete discard." % [paper_serial,kind.to_upper()]
+	return "SHEET %02d PRINTED / %s\nPaper collected into the cockpit rack.\nTab: pin/stow beside this display\nShift+Tab: next sheet | Delete: discard\nP: full-page reader outside the CLI" % [paper_serial,kind.to_upper()]
 
 func paper_list() -> String:
 	var rows: Array[String]=["COCKPIT PAPER RACK"]
