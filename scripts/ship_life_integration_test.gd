@@ -30,6 +30,7 @@ func run(controller: Node3D) -> bool:
 	check(not host.tool.visible and not host.daily_paper.visible, "fresh player has empty hands")
 	check(host.ship.controller == host and host.economy == host.life_economy, "flight and cargo use the combined controller")
 	await _provision_and_accept()
+	await _hab_furniture()
 	await _kitchen()
 	await _shower_and_checks()
 	await _rest_clock()
@@ -116,6 +117,73 @@ func _provision_and_accept() -> void:
 	await use_fixture("paper",Vector3(-0.65,0.05,-4.80))
 	host.panel.hide()
 
+func _hab_furniture() -> void:
+	var hab=host.ship.hab_module
+	await aim(Vector3(0,0.05,-4.85),hab.use_targets.bench.global_position)
+	check(hab.interaction(host.camera,host.walker).get("action","")=="bench" and host.prompt.text.contains("SIT"), "actual bench ray advertises independent sitting")
+	var state:Dictionary=host.life.snapshot()
+	await real_key(KEY_F)
+	check(host.seated_table and equivalent(state,host.life.snapshot()), "real F sits without needing a meal or changing survival needs")
+	check(not host.tool.visible and host.daily_paper.visible, "idle sitting keeps the held checklist and cargo tool holstered")
+	var seat_pose:Vector3=host.walker.position
+	await real_key(KEY_TAB)
+	check(host.paper_open and host.seated_table, "checklist can be read while resting at bench")
+	await real_key(KEY_TAB)
+	await real_key(KEY_T)
+	check(hab.table_folded, "real T folds empty table while seated")
+	check(host.save_life("/tmp/ship-life-moving-hab.json").contains("stop moving"), "save refuses an unfinished furniture animation")
+	await host.get_tree().create_timer(0.35).timeout
+	host._update_life_visuals()
+	check(is_equal_approx(hab.table_pivot.rotation.z,PI/2) and host.walker.position==seat_pose, "table folds upward without shifting the seated player")
+	check(host.life_art.table_plate.get_parent()==hab.table_pivot and host.fixtures.targets.table.collision_layer==0, "meal props follow fold and folded table has no phantom meal target")
+	var path:="/tmp/ship-life-hab-furniture.json"
+	check(host.save_life(path).contains("saved"), "folded table and seated pose can be saved")
+	await real_key(KEY_G)
+	check(not host.seated_table and is_equal_approx(host.camera.position.y,1.62), "real G stands in aisle with standing eye height")
+	await aim(Vector3(0,0.05,-5.18),hab.use_targets.table.global_position)
+	check(hab.interaction(host.camera,host.walker).get("action","")=="table", "folded desk remains directly reachable from aisle")
+	await real_key(KEY_F)
+	await host.get_tree().create_timer(0.35).timeout
+	host._update_life_visuals()
+	check(not hab.table_folded and is_zero_approx(hab.table_pivot.rotation.z), "real F lowers the desk from standing")
+	host.load_life(path)
+	check(host.seated_table and hab.table_folded and is_equal_approx(hab.table_pivot.rotation.z,PI/2), "load restores independent seated pose and folded desk together")
+	await real_key(KEY_T)
+	await host.get_tree().create_timer(0.35).timeout
+	host._update_life_visuals()
+	check(not hab.table_folded and host.fixtures.targets.table.collision_layer==4, "seated T lowers desk and restores meal interaction")
+	await real_key(KEY_G)
+	# A player inside the tabletop sweep must not be crushed by the animation.
+	await aim(Vector3(0,0.05,-5.18),host.fixtures.targets.table.global_position)
+	press(KEY_T)
+	await host.get_tree().create_timer(0.35).timeout
+	host.walker.position=Vector3(-1.26,0.05,-5.18)
+	await frames(3)
+	host._toggle_table()
+	check(hab.table_folded and hab.notice.contains("Step clear"), "furniture clearance prevents lowering through the player")
+	await aim(Vector3(0,0.05,-5.18),hab.use_targets.table.global_position)
+	press(KEY_F)
+	await host.get_tree().create_timer(0.35).timeout
+	host._update_life_visuals()
+	await aim(Vector3(0,0.05,-5.18),host.fixtures.targets.table.global_position)
+	await real_key(KEY_F)
+	await host.get_tree().create_timer(0.35).timeout
+	host._update_life_visuals()
+	check(hab.table_folded and host.life.table_bites==-1, "F folds empty desk without creating a meal")
+	# Version-one saves before this change had no furniture field.
+	var old_save:Dictionary=host._decode(JSON.parse_string(FileAccess.get_file_as_string(path)))
+	old_save.erase("hab")
+	var old_file:=FileAccess.open(path,FileAccess.WRITE)
+	old_file.store_string(JSON.stringify(host._encode(old_save)));old_file.close()
+	host.load_life(path)
+	check(not hab.table_folded and is_zero_approx(hab.table_pivot.rotation.z), "old saves default to a usable lowered desk")
+	await real_key(KEY_G)
+	# Leave it folded for the kitchen test: a player can still lower it with food in hand.
+	await aim(Vector3(0,0.05,-5.18),hab.use_targets.table.global_position)
+	press(KEY_T)
+	await host.get_tree().create_timer(0.35).timeout
+	host._update_life_visuals()
+
 func _kitchen() -> void:
 	await use_fixture("fridge",Vector3(0,0.05,-5.60))
 	check(host.life.hand_item == "raw_food" and host.life.food_stock == 3, "F on physical fridge reserves one food day")
@@ -128,8 +196,15 @@ func _kitchen() -> void:
 	check(host.life_art.oven_plate.visible, "ready meal is visible in oven")
 	press(KEY_F)
 	check(host.life.hand_item == "meal" and host.life.hand_bites == 5, "F retrieves cooked five-bite meal")
+	await aim(Vector3(0,0.05,-5.18),host.ship.hab_module.use_targets.table.global_position)
+	press(KEY_F)
+	await host.get_tree().create_timer(0.35).timeout
+	host._update_life_visuals()
+	check(not host.ship.hab_module.table_folded and host.life.hand_item=="meal" and host.life.table_bites==-1, "F lowers folded desk with meal in hand without losing or placing food")
 	await use_fixture("table",Vector3(-0.45,0.05,-4.50))
 	check(host.life.table_bites == 5 and host.seated_table, "placing plate uses table and seats player")
+	press(KEY_T)
+	check(not host.ship.hab_module.table_folded and host.life.table_bites==5, "folding is blocked while a meal is on the desk")
 	var cushion: Vector3=host.life_art.dining_seat.global_position
 	check(is_equal_approx(host.walker.global_position.x,cushion.x) and is_equal_approx(host.walker.global_position.z,cushion.z), "dining pose is centered over the physical bench cushion")
 	var ray:=PhysicsRayQueryParameters3D.create(cushion+Vector3(0,0.3,0),cushion-Vector3(0,0.2,0),1)
@@ -141,6 +216,8 @@ func _kitchen() -> void:
 	for bite in 4: press(KEY_F)
 	check(host.life.table_bites == 0 and is_equal_approx(host.life.daily_food,1.0), "five real F presses finish daily meal and leave dirty plate")
 	check(host.life_art.table_plate.visible, "finished plate remains visible until collected")
+	press(KEY_T)
+	check(not host.ship.hab_module.table_folded and host.life.table_bites==0, "dirty plate must be cleared before folding")
 	press(KEY_F)
 	check(host.life.hand_item == "dirty_plate" and host.life.table_bites == -1, "F picks up used plate without creating a new meal")
 	press(KEY_G)

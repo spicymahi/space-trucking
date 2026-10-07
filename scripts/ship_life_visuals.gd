@@ -139,12 +139,15 @@ func _hab() -> void:
 	dining_seat.position = Vector3(-1.24, 0.61, -4.49)
 	# Keep the original table and its clear forward place setting. The keyboard
 	# remains on the back half; meal props never float over its keys.
-	Art.box(fittings, Vector3(-1.20, 0.849, -5.00), Vector3(0.42, 0.009, 0.29), Color("536253"))
+	var placemat := Art.box(fittings, Vector3(-1.20, 0.849, -5.00), Vector3(0.42, 0.009, 0.29), Color("536253"))
+	placemat.reparent(host.hab_module.table_pivot, true)
 	_target("table", Vector3(-1.20, 0.876, -5.00), Vector3(0.50, 0.10, 0.32))
+	targets.table.reparent(host.hab_module.table_pivot, true)
 	table_plate = Node3D.new()
 	fittings.add_child(table_plate)
 	table_plate.name = "DailyMealPlace"
 	table_plate.position = Vector3(-1.20, 0.864, -5.00)
+	table_plate.reparent(host.hab_module.table_pivot, true)
 	_target("bunk", Vector3(-0.79, 0.79, -7.45), Vector3(0.20, 0.24, 1.78))
 	_plaque(Vector3(-0.674, 0.69, -7.50), PI/2, "BUNK / REST", 0.45)
 	# Overlay the static HAB screen with a live inventory/checklist terminal.
@@ -199,6 +202,7 @@ func _port() -> void:
 	repairs_readout = repairs.get_node("StatusText")
 
 func refresh(state: Dictionary) -> void:
+	targets.table.collision_layer = 4 if state.get("table_available", true) else 0
 	var bites := int(state.get("table_bites", -1))
 	if bites != last_table_bites:
 		for child in table_plate.get_children():

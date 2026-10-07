@@ -35,7 +35,9 @@ Food interaction sequence:
 4. Eat in five interactions, each contributing part of the daily requirement.
 5. Take the dirty plate to the sink; it is cleaned and disappears.
 
-A plate left at the eating place prevents sitting there for the next meal. Partial meals retain their remaining portion. Removing, moving, cooking, and eating must not double-consume or duplicate a food unit.
+A plate left at the eating place prevents serving the next meal. Partial meals retain their remaining portion. Removing, moving, cooking, and eating must not double-consume or duplicate a food unit.
+
+The dining bench and folding desk are part of everyday hab use, independent of eating. F on the bench seats the player for relaxing, reading paper, or using HAB; G stands. T folds/lowers the desk while seated, and F or T on the empty tabletop works from standing. Plates block folding until cleared, and the mechanism checks player clearance. A carried meal does not prevent lowering the desk. Meal props follow the table pivot; the meal interaction is disabled while folded or moving. Furniture positions persist in the combined save, with backward-compatible defaults for older sessions.
 
 Water interaction sequence:
 

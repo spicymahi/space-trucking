@@ -103,6 +103,8 @@ func _process(delta:float) -> void:
 		life.tick_interactions(delta,shower_on and LifeArt.SHOWER_BOUNDS.has_point(ship.to_local(walker.global_position)))
 	printed_timer=maxf(0,printed_timer-delta)
 	_update_life_visuals()
+	if seated_table and not paper_open and not panel.visible and ship.active_terminal==null:
+		prompt.text += "\n[G] STAND    [T] "+("LOWER TABLE" if ship.hab_module.table_folded else "FOLD TABLE")
 	if daily_paper.visible and not paper_open and ship.active_terminal==null and not panel.visible:
 		prompt.text += "\n[H] STOW PAPER    [TAB] READ CLOSER    [F] AT RECYCLING BIN TO DISCARD"
 	if ship.flight.warning_serial!=ship.seen_warning:
@@ -171,10 +173,14 @@ func _update_aim() -> void:
 		var action:String=hit.collider.get_meta("life_action","")
 		prompt.text="[F] "+_action_hint(action)
 		return
+	var hab:Dictionary=ship.hab_module.interaction(camera,walker)
+	if not hab.is_empty():
+		prompt.text="[F] "+("SIT AT DINING BENCH" if hab.action=="bench" else (_table_hint() if hab.action=="table" else str(hab.label)))
+		return
 	var service:Dictionary=ship.service_module.interaction(camera,walker)
 	if not service.is_empty():prompt.text="[F] "+str(service.get("label",service.action));return
-	if seated_table:prompt.text="[F] EAT / PICK UP PLATE    [G] STAND";return
 	if life.hand_item=="water_glass":prompt.text="[F] DRINK WATER / THEN RETURN GLASS TO SINK";return
+	if seated_table:prompt.text="DINING NOOK / RELAX OR READ YOUR CHECKLIST";return
 	if seated_pilot:prompt.text="W/S THRUST  A/D STRAFE  SPACE/CTRL LIFT  ARROWS STEER  X STOP ROTATION\n[G] LEAVE SEAT / F USE COMPUTER";return
 	if walker.position.z< -9.0 and walker.position.distance_to(Vector3(0,0,-10.45))<2.1:prompt.text="[G] TAKE PILOT SEAT / F USE COMPUTER"
 
@@ -187,7 +193,7 @@ func _action_hint(action:String) -> String:
 	match action:
 		"fridge":return "TAKE FOOD / %d DAYS STOCKED"%life.food_stock
 		"oven":return "OVEN / "+(life.oven_state.to_upper() if not life.oven_state.is_empty() else "INSERT FOOD")
-		"table":return "SET MEAL" if life.hand_item=="meal" else ("EAT / %d BITES LEFT"%life.table_bites if life.table_bites>0 else ("PICK UP DIRTY PLATE" if life.table_bites==0 else "TABLE"))
+		"table":return _table_hint()
 		"sink":return "WASH PLATE / GLASS"
 		"cabinet":return "TAKE GLASS"
 		"water":return "FILL GLASS / %d DAYS WATER"%life.water_stock
@@ -211,8 +217,13 @@ func _use() -> void:
 		ship.open_terminal(terminal);return
 	var hit:=_life_hit()
 	if not hit.is_empty():_use_life(hit.collider.get_meta("life_action"));return
-	if seated_table:_use_life("table");return
+	var hab:Dictionary=ship.hab_module.interaction(camera,walker)
+	if not hab.is_empty():_use_hab(hab.action);return
 	if life.hand_item=="water_glass":_use_life("drink");return
+	if seated_table:
+		if life.table_bites>=0 and not ship.hab_module.table_folded:_use_life("table")
+		else:message("Relax at the bench. T folds/lowers the table; G stands up.")
+		return
 	var service:Dictionary=ship.service_module.interaction(camera,walker)
 	if not service.is_empty() and service.action in ["wash_door","air_door","wash_inside","air_inside"]:ship.service_module.use(service.action);return
 	if not life.hand_item.is_empty():message("Your hand tool is holding "+life.hand_item.replace("_"," ")+". Finish the kitchen task first.");return
@@ -220,6 +231,10 @@ func _use() -> void:
 
 func _use_life(action:String) -> void:
 	if held>=0:message("Put the cargo down before using the hab.");return
+	if action=="table":
+		if _table_moving():message("Wait for the table to stop moving.");return
+		if ship.hab_module.table_folded:_toggle_table();return
+		if life.hand_item!="meal" and life.table_bites<0:_toggle_table();return
 	if action in ["hab","sensors","provisions","repairs","bunk"]:open_terminal(action);return
 	if action=="paper":
 		_collect_daily_paper()
@@ -245,8 +260,39 @@ func _sit_at_table() -> void:
 	walker.global_position=Vector3(seat.x,ship.global_position.y+0.05,seat.z)
 	walker.velocity=Vector3.ZERO;walker.rotation=Vector3.ZERO
 	camera.global_position=seat+Vector3(0,0.72,0)
-	camera.look_at(life_art.table_plate.global_position+Vector3(0,0.04,0),Vector3.UP)
+	var focus:Vector3=life_art.table_plate.global_position+Vector3(0,0.04,0) if life.table_bites>0 else ship.to_global(Vector3(-1.29,1.25,-5.99))
+	camera.look_at(focus,Vector3.UP)
 	pitch=camera.rotation.x
+	_update_life_visuals()
+
+func _table_moving() -> bool:
+	return ship.hab_module.furniture_tween!=null and ship.hab_module.furniture_tween.is_running()
+
+func _table_hint() -> String:
+	if _table_moving():return "TABLE MOVING / WAIT"
+	if ship.hab_module.table_folded:return "LOWER TABLE / [T]"
+	if life.hand_item=="meal":return "SET MEAL"
+	if life.table_bites>0:return "EAT / %d BITES LEFT"%life.table_bites
+	if life.table_bites==0:return "PICK UP DIRTY PLATE"
+	return "FOLD TABLE / [T]"
+
+func _toggle_table() -> void:
+	if held>=0:message("Put the cargo down before folding or lowering the table.");return
+	if life.table_bites>=0:message("Clear the plate before folding the table. Take it to the sink when finished.");return
+	if _table_moving():message("Wait for the table to stop moving.");return
+	ship.hab_module.use("table")
+	message(ship.hab_module.notice if not ship.hab_module.notice.is_empty() else ("Table folding into the wall." if ship.hab_module.table_folded else "Table lowering for use."))
+	_update_life_visuals()
+
+func _use_hab(action:String) -> void:
+	if action=="table":_use_life("table");return
+	if action=="bench":
+		if seated_table:message("G stands up; T folds or lowers the table.");return
+		if held>=0 or seated_pilot:message("Put the cargo down before sitting.");return
+		_sit_at_table();message("Seated at the dining nook. G stands up; T folds or lowers the table.");return
+	if not life.hand_item.is_empty():message("Put your carried item away before adjusting the furniture.");return
+	ship.hab_module.use(action)
+	if not ship.hab_module.notice.is_empty():message(ship.hab_module.notice)
 
 func _collect_daily_paper() -> void:
 	if not printed or not paper_in_tray or printed_timer>0:return
@@ -341,6 +387,11 @@ func _unhandled_input(event:InputEvent) -> void:
 		if paused_life:return
 		if panel.visible:return
 		if paper_open:return
+		if code==KEY_T and held<0:
+			var hab:Dictionary=ship.hab_module.interaction(camera,walker)
+			var hit:Dictionary=_life_hit()
+			if seated_table or hab.get("action","")=="table" or (not hit.is_empty() and hit.collider.get_meta("life_action","")=="table"):
+				_toggle_table();return
 		if code==KEY_G:
 			if seated_table:
 				seated_table=false;walker.position=Vector3(0,0.05,-4.65);walker.rotation=Vector3.ZERO;camera.position.y=1.62;pitch=0;camera.rotation=Vector3.ZERO;return
@@ -361,6 +412,7 @@ func _update_life_visuals() -> void:
 	var display:Dictionary=life.snapshot()
 	if printed and life.printed_day==life.day():paper_text=life.checklist_text()
 	display.shower_on=shower_on;display.printed=printed and paper_in_tray;display.print_progress=1.0-printed_timer;display.paper_text=paper_text;display.sensor_summary=life.sensor_text()
+	display.table_available=not ship.hab_module.table_folded and not _table_moving()
 	life_art.refresh(display)
 	if daily_paper:
 		daily_paper.set_text(paper_text)
@@ -647,7 +699,7 @@ func complete_delivery() -> bool:
 	return ok
 
 func _guide_text() -> String:
-	return "COMPLETE SHIP LIFE TEST\n\n1. Dock CONTRACTS: jobs, accept 1 (small) or accept 2 (full).\n2. PROVISIONS beside it: buy food 12 / buy water 12 / refuel.\n3. F carry cargo; R/T rotate; pack racks; cargo-lock button.\n4. Flight: cockpit CHECKLIST print, CHART plot/print, NAV coords/burn/reserve/load.\n   ENGINE port on / starboard on; COMMS request/code; CHECKLIST hatch close/ramp raise.\n   COMMS depart, G pilot seat, manual exit, NAV engage, G stand.\n   OR dock DEPARTURE: start test to begin a prepared cruise.\n5. HAB computer: stock / print, F collect at tray. TAB inspect / H stow/retrieve / F at galley recycling bin.\n6. Fridge → oven → cooked plate → table → five F bites → plate → sink.\n7. Cabinet → cooler → F drink → sink. Shower periodically in bathroom.\n8. Read assigned sensors on your paper. ENGINEERING: check <sensor>, trim a/b/c, test.\n9. Bunk: pass until20:00, then sleep until06:00. Black progress shows the skip.\n10. Arrival wakes90s early. NAV approach / auto dock, or fly manually.\n11. CHECKLIST ramp lower / hatch open. Unlock cargo, unload, F complete at DELIVERY.\n\nF5 save / F9 load / ESC pause / G stand from table or pilot seat.\nThis session has its own save; your old flight progress is preserved."
+	return "COMPLETE SHIP LIFE TEST\n\n1. Dock CONTRACTS: jobs, accept 1 (small) or accept 2 (full).\n2. PROVISIONS beside it: buy food 12 / buy water 12 / refuel.\n3. F carry cargo; R/T rotate; pack racks; cargo-lock button.\n4. Flight: cockpit CHECKLIST print, CHART plot/print, NAV coords/burn/reserve/load.\n   ENGINE port on / starboard on; COMMS request/code; CHECKLIST hatch close/ramp raise.\n   COMMS depart, G pilot seat, manual exit, NAV engage, G stand.\n   OR dock DEPARTURE: start test to begin a prepared cruise.\n5. HAB computer: stock / print, F collect at tray. TAB inspect / H stow/retrieve / F at galley recycling bin.\n6. Fridge → oven → cooked plate → table → five F bites → plate → sink.\n7. Cabinet → cooler → F drink → sink. Shower periodically in bathroom.\n8. Read assigned sensors on your paper. ENGINEERING: check <sensor>, trim a/b/c, test.\n9. Bunk: pass until20:00, then sleep until06:00. Black progress shows the skip.\n10. Arrival wakes90s early. NAV approach / auto dock, or fly manually.\n11. CHECKLIST ramp lower / hatch open. Unlock cargo, unload, F complete at DELIVERY.\n\nHAB furniture: F on bench to sit; G stand; T fold/lower table while seated.\nClear plates before folding. From the aisle, F on the empty table folds/lowers it.\nF5 save / F9 load / ESC pause / G stand from table or pilot seat.\nThis session has its own save; your old flight progress is preserved."
 
 func _save_path(path:String) -> String:
 	if "--ship-life-test" in OS.get_cmdline_user_args() and path.begins_with("user://"):
@@ -657,8 +709,10 @@ func _save_path(path:String) -> String:
 func save_life(path:String=LIFE_SAVE) -> String:
 	if not life_ready:return "Session not ready."
 	if not skip.is_empty() or ship.ramp_moving or ship.loading_module.hatch_moving:return "Finish rest or moving hatch/ramp before saving."
+	if _table_moving() or (ship.hab_module.drawer_tween!=null and ship.hab_module.drawer_tween.is_running()):return "Wait for the hab furniture to stop moving before saving."
 	ship.sync_hardware()
 	var data:Dictionary={"version":1,"life":life.snapshot(),"economy":life_economy.snapshot(),"flight":ship.flight.snapshot(),"parcels":parcels.duplicate(true),"manifest":packing.manifest.duplicate(true),"solution":packing.solution_order.duplicate(),"racked":packing.placements.duplicate(true),"floor":floor_packing.placements.duplicate(true),"held":held,"held_size":held_size,"locked":locked,"walker":walker.transform,"camera":camera.transform,"seated_pilot":seated_pilot,"seated_table":seated_table,"printed":printed,"paper_in_tray":paper_in_tray,"paper_text":paper_text,"paper_stowed":paper_stowed,"case_poses":{},"roles":[],"maps":[]}
+	data.hab={"table_folded":ship.hab_module.table_folded,"drawer_open":ship.hab_module.drawer_open,"lamp_on":ship.hab_module.lamp_on}
 	for id in cases:data.case_poses[id]=cases[id].global_transform
 	for terminal in ship.terminals:
 		data.roles.append(terminal.kind)
@@ -682,6 +736,7 @@ func load_life(path:String=LIFE_SAVE) -> String:
 	var check_flight:=preload("res://scripts/longhaul_flight_state.gd").new()
 	if not check_economy.restore(data.economy) or not check_flight.restore(data.flight):return "Invalid economic/flight state; session preserved."
 	if not data.walker is Transform3D or not data.camera is Transform3D:return "Invalid player pose."
+	if not data.get("hab",{}) is Dictionary:return "Invalid hab furniture state; session preserved."
 	for id in data.parcels:
 		if not data.case_poses.has(id) or not data.case_poses[id] is Transform3D:return "Missing cargo pose."
 	if ship.active_terminal:ship.close_terminal()
@@ -702,6 +757,7 @@ func load_life(path:String=LIFE_SAVE) -> String:
 	seated_pilot=bool(data.get("seated_pilot",false));seated_table=bool(data.get("seated_table",false));printed=bool(data.get("printed",false));paper_in_tray=bool(data.get("paper_in_tray",false));printed_timer=0
 	paper_text=str(data.get("paper_text",life.checklist_text() if printed and life.printed_day==life.day() else "Previous day work order. Recycle and reprint at HAB."))
 	paper_stowed=bool(data.get("paper_stowed",false));paper_open=false;paper_terminal_hidden=false;daily_paper.set_closeup(false,true)
+	_restore_hab(data.get("hab",{}))
 	if seated_table:_sit_at_table()
 	ship.ramp_up=ship.flight.ramp_raised;ship.ramp_pivot.rotation.x=-PI/2 if ship.ramp_up else atan(1.2/4.2);ship.ramp_fold.rotation.x=PI if ship.ramp_up else 0
 	ship.loading_module.hatch_open=not ship.flight.hatch_closed
@@ -714,6 +770,18 @@ func load_life(path:String=LIFE_SAVE) -> String:
 	observed_phase=ship.flight.phase;ship._update_flight_world();jobs=economy.offers(economy.station)
 	_update_life_visuals();_refresh_station();Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
 	return "Ship-life session restored. "+life.time_text()
+
+func _restore_hab(state:Dictionary) -> void:
+	var hab=ship.hab_module
+	if hab.furniture_tween:hab.furniture_tween.kill()
+	if hab.drawer_tween:hab.drawer_tween.kill()
+	# Older saves have an open table. Never restore a plate on a folded surface.
+	hab.table_folded=bool(state.get("table_folded",false)) and life.table_bites<0
+	hab.table_pivot.rotation.z=PI/2 if hab.table_folded else 0.0
+	hab.drawer_open=bool(state.get("drawer_open",false))
+	hab.drawer.position.x=-0.395 if hab.drawer_open else -0.715
+	var lamp:bool=bool(state.get("lamp_on",true))
+	if hab.lamp_on!=lamp:hab.use("lamp")
 
 func _encode(value:Variant) -> Variant:
 	if value is int:return {"@int":value}
@@ -763,6 +831,9 @@ func _run_life_tests() -> void:
 	get_tree().quit(0 if ok else 1)
 
 func _capture_life() -> void:
+	if "--hab-furniture" in OS.get_cmdline_user_args():
+		await _capture_hab_furniture()
+		return
 	if "--survival-revision" in OS.get_cmdline_user_args():
 		await _capture_survival_revision()
 		return
@@ -779,6 +850,28 @@ func _capture_life() -> void:
 	await get_tree().create_timer(1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/ship-life-sleep-progress.png")
+	get_tree().quit()
+
+func _capture_hab_furniture() -> void:
+	set_physics_process(false)
+	_sit_at_table()
+	await get_tree().create_timer(0.5).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/ship-life-hab-seated.png")
+	camera.look_at(ship.to_global(Vector3(-1.35,1.1,-5.18)),Vector3.UP)
+	_toggle_table()
+	await get_tree().create_timer(0.5).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/ship-life-hab-folded-seat.png")
+	seated_table=false;walker.position=Vector3(0,0.05,-4.95);walker.rotation=Vector3.ZERO;camera.position=Vector3(0,1.62,0)
+	camera.look_at(ship.to_global(Vector3(-1.4,1.0,-5.1)),Vector3.UP)
+	await get_tree().create_timer(0.3).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/ship-life-hab-folded-aisle.png")
+	_toggle_table()
+	await get_tree().create_timer(0.5).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/ship-life-hab-lowered.png")
 	get_tree().quit()
 
 func _capture_survival_revision() -> void:

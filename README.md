@@ -8,6 +8,8 @@ At HAB, `print` produces a sheet to collect with **F**; **H** stows/retrieves it
 
 The clock advances in five-minute display steps, with a full game day taking **60 real minutes** (18× slower than the initial survival test). Flight durations retain their existing real-time length.
 
+The hab bench works between meals: **F** on its cushion to sit, **G** to stand, **T** while seated to fold/lower the desk. From the aisle, **F** on the empty desk also folds/lowers it. Clear plates first; the saved session remembers the furniture positions.
+
 This session saves separately as `ship_life_v1.json`; **F5** saves and **F9** loads. An emergency end-of-run uses F9 to restore its departure checkpoint. Existing `Fly Longhaul.command` progress and the cargo-only test are preserved. The default project scene still opens the previous Longhaul build; use the new launcher for all combined loops.
 
 ## Project documentation
