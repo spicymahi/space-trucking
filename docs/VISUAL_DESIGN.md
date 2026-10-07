@@ -13,7 +13,8 @@ The game's visual language is compact cassette futurism: practical hardware, enc
 - Align components on shared mounting grids. Labels, instruments, handles, and support rails belong to the same assembly.
 - Use readable hardware detail rather than arbitrary clutter: replaceable modules, cartridge slots, fuse banks, isolation switches, filters, latches, and service covers.
 - Preserve a hierarchy of controls. Frequently used information is close to the user; secondary controls require only a small turn; maintenance equipment lives outside the primary operating position.
-- Keep the geometry achievable in the established Godot style: block-built forms, matte cream and grey housings, orange accents, green and amber CRT graphics, warm practical lighting.
+- Keep the geometry achievable in the established Godot style: block-built forms, matte painted housings, readable green/amber CRT graphics, and warm practical lighting.
+- Palette revision approved 2026-10-06: cream and orange is an option, not a mandatory palette. Cream/red, cream/blue and other restrained, richer industrial colors are welcome. Use coherent painted color families balanced with neutrals; retain cassette-futurist equipment and avoid extravagant neon or rainbow treatments. Different stations and ships may have different palettes.
 
 ## Longhaul cockpit application
 
@@ -89,3 +90,7 @@ The cockpit map separates overview and station browsing. The overview contains o
 The repository root includes macOS launchers for the original hab study, the separate life slice, and the detailed Longhaul walkthrough. They expect Godot at `/Applications/Godot.app/Contents/MacOS/Godot`; other platforms can open the corresponding scenes directly in Godot. Generated ship concepts are archived in `docs/ship-concepts`.
 
 The latest Longhaul tour passed its walking and cockpit checks plus 48 hab, 73 service, and 100 aft checks. The life slice previously passed its 51-check suite. The original game scene is retained; the default startup is now the flight scene. The new flight scene has its own tests, documented in `FLIGHT.md`.
+
+## Hangar concept direction
+
+The user preferred the compact remote-outpost hangar from the five initial concepts: one Longhaul berth, rear-ramp handling space, separate pickup/delivery areas, dense functional wall equipment, and a small dispatch booth with nearby service terminals. Three palette studies are saved in [the hangar color study](station-concepts/2026-10-06/hangar-colors/README.md). These are generated design references, not implemented Godot assets or dimensionally validated plans. No final palette has been selected. Station exterior concepts must accommodate this hangar volume, its entry door, logistics connection and service spaces.
