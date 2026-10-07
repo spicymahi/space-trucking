@@ -17,7 +17,7 @@ Normal sleep wakes the player at the next 06:00. Restrict sleep to an evening/ni
 
 Both sleeping and passing time show a BLACK SCREEN WITH A PROGRESS BAR indicating progress toward the scheduled end; show how much remains. This presentation is required by the user. The initial presentation targets four real seconds for an uninterrupted skip; the progress bar shows remaining shipboard hours. Escape interrupts rest. Arrival/fault interrupts can shorten it.
 
-Interrupt skipping for arrival, a ship condition needing attention, or inadequate supplies for the remaining skip. Preserve at least 90 seconds of real active play before arrival needs attention, accounting for the world-time conversion. Do not run past an interrupt and then rewind. Skip simulation must still advance consumption, journey progress, wear, and economy consistently.
+The implemented skip interrupts for arrival watch, loss of NAV/propulsion, or a sensor reaching its service limit at day rollover. Eligibility checks daily needs and available supplies before starting rest; stocks are consumed by kitchen interactions, not automatically during skipped days. Preserve at least 90 seconds of real active play before arrival braking, accounting for world-time conversion. Do not run past an interrupt and then rewind. Skipped time advances the calendar, journey, hygiene/wear and economy through the same simulation path as ordinary play.
 
 ## Provisions and onboard inventory
 

@@ -1,6 +1,6 @@
 # Longhaul — complete Blender interior and fitted exterior
 
-Editable Blender source for the playable Longhaul, built from the approved game layout. The normal flight scene now uses the optimized production model in `assets/ships/longhaul/longhaul_playable.glb`. Existing gameplay controllers, saved progress and interaction geometry remain authoritative.
+Editable Blender source for the playable Longhaul, built from the approved game layout. The normal flight scene now uses the optimized production model in `assets/ships/longhaul/longhaul_playable.glb`. Existing gameplay controllers, saved progress and interaction geometry remain authoritative. The combined ship-life session also installs this production model; it replaces the old cargo equipment with functional packing racks and adds live survival fixtures/paper. See [the development guide](../../docs/DEVELOPMENT.md) for controller ownership and combined regression checks.
 
 ## Review
 

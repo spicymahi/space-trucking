@@ -1,5 +1,7 @@
 # Longhaul — cockpit flight and ship life
 
+Scope: this guide describes the retained standalone flight build and its shared cockpit/navigation system. For the current combined cargo/flight/survival game, launch **Test Ship Life.command** and use [SHIP_LIFE_TEST.md](SHIP_LIFE_TEST.md). The combined session uses G for the pilot seat, paid port services, daily sensor care, a slower shared clock that advances at port, bunk-only time skipping, and separate saves. Standalone life/service/clock/freight rules below apply only to `longhaul_flight.tscn`; see the [build comparison](GAMEPLAY.md#current-build-versus-retained-prototypes).
+
 The default scene is `scenes/longhaul_flight.tscn`. On macOS, double-click `Fly Longhaul.command`. The detailed ship now has printed flight paperwork, manual station flying, and automatic transfers around Aurel: a ringed gas giant, eight moons and fifteen stations. The earlier economy prototype and independent room study retain their own launchers.
 
 ## Cockpit layout

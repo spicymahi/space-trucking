@@ -1,5 +1,7 @@
 # Visual design: every surface has a job
 
+Current status (2026-10-06): the room philosophy below remains the art reference. Sections describing local demonstrations refer to the retained design-study scenes. The combined game now connects the cockpit, cargo, kitchen, shower, paper, sensors and hab furniture; its controls are in [SHIP_LIFE_TEST.md](SHIP_LIFE_TEST.md). In that session G stands from the bench (F remains the old preview control). Refined Blender assets are integrated through the [production asset pipeline](../art/longhaul_v3/README.md), with live Godot displays, props and colliders.
+
 The game's visual language is compact cassette futurism: practical hardware, enclosed machinery, modular computers, and visible maintenance access. The user's references are the working spacecraft of Alien and the dense equipment environments of Observer and Routine. They inform the hardware and spatial design; the game's tone remains cozy and nonviolent.
 
 ## Rules for every room

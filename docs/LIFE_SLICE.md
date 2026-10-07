@@ -1,5 +1,7 @@
 # Kestrel — A Quiet Delivery
 
+Historical prototype documentation. The current integrated gameplay is **Test Ship Life.command**, documented in [GAMEPLAY.md](GAMEPLAY.md) and [SHIP_LIFE_TEST.md](SHIP_LIFE_TEST.md). Do not treat this prototype’s controls, economy or survival rules as current requirements.
+
 A playable two-station prototype of the cozy cargo and ship-life loop. Launch `Play Life Slice.command` from the workspace root. This uses its own scene; the original game's startup scene is unchanged.
 
 ## First run

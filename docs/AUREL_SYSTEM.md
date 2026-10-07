@@ -1,5 +1,7 @@
 # Aurel — the station network
 
+Scope: geography, map browsing and route geometry are shared by standalone flight and the current combined ship-life session. For current freight, services, clock and saves use [CARGO.md](CARGO.md) and [SHIP_LIFE_TEST.md](SHIP_LIFE_TEST.md). The standalone freight/save sections below are retained for that older entry point.
+
 Longhaul is the player's home. The current setting has one ringed gas giant, eight moons and fifteen orbital stations: established inner ports, industries around six moons, and isolated outer facilities. All station destinations use the same completed cockpit preparation, manual departure, automatic journey, manual/assisted arrival and ship-life loop. Moons are scenery and orbital anchors; there are no landable surfaces or atmospheric flight areas.
 
 ![Aurel rendered by the game's Forward+ world renderer](screenshots/aurel-ringed-giant.png)
@@ -55,19 +57,23 @@ Normal-time journey targets are about 5–8 minutes locally, 10–15 minutes reg
 
 ## Scale and simulation boundaries
 
-This is a deliberately compressed game system. One navigation-world unit corresponds to four orbital catalogue kilometres when placing bodies and their orbits. The ship, pads, six-axis controls and near-berth readouts use local metre-scale geometry. Printed NAV coordinates are navigation-grid kilometres; they should be copied as printed rather than converted from orbital catalogue values. The fictional ship clock uses sixty simulated clock seconds per normal play second.
+This is a deliberately compressed game system. One navigation-world unit corresponds to four orbital catalogue kilometres when placing bodies and their orbits. The ship, pads, six-axis controls and near-berth readouts use local metre-scale geometry. Printed NAV coordinates are navigation-grid kilometres; they should be copied as printed rather than converted from orbital catalogue values. Standalone flight uses sixty simulated clock seconds per normal play second. The combined ship-life session instead uses 24 shipboard seconds per real second, displays five-minute increments, and advances time while docked as well. This clock change does not rescale the flight geometry.
 
 Aurel gravity affects ship motion. Moons and stations follow analytic Kepler-style orbital ephemerides, including stations orbiting moving moons. Moon gravity acting on the ship, N-body dynamics and optimized slingshot routes are not implemented. The automatic trajectory controller may apply sustained corrective thrust; it is not a claim of an optimal ballistic transfer. Manual flight retains momentum and the existing thrust/fuel behavior.
 
 The conservative ring exclusion sphere makes route safety straightforward and keeps the player out of ring material. It also excludes otherwise physically possible crossings above or below the rings. That is an intentional first implementation limit.
 
-## Freight and station life
+## Standalone freight and station life
+
+The combined session replaces this older COMMS freight loop with reserved dynamic station contracts, multi-case packing, paid provisions/repairs, optional advances and coarse background market trading. See [CARGO.md](CARGO.md).
 
 The station network supports delivery contracts in the detailed Longhaul scene. COMMS provides `jobs 1|2|3`, `accept <station>`, `contract`, `crew load`, `crew unload`, and `deliver`. A delivery case can be handled manually using the ship's cargo workflow, or station crews can move it for a fee. There are no delivery deadlines. Trading independently purchased commodities, expanded shops and a complete economy remain broader work beyond the delivery contract integration.
 
 The common berth preserves the existing cargo ramp, station access and nose-first docking behavior. Station supplies and repair services remain accessible through COMMS. The station's industry and imports/exports establish its identity and the delivery network's rationale.
 
-## Saves and validation
+## Standalone saves and validation
+
+Combined saves and their validation are documented in [DEVELOPMENT.md](DEVELOPMENT.md#save-ownership-and-compatibility).
 
 Pre-Aurel flight saves retain the player's supplies, needs, fuel, cargo/room state and journey count, but are moved safely to their last known origin berth because the old coordinates belong to a different world. The old route is cleared, and the game explicitly announces the chart update. Replot before departure. Existing paper is kept as historical paper; it cannot silently validate a new route.
 

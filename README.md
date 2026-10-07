@@ -14,7 +14,7 @@ This session saves separately as `ship_life_v1.json`; **F5** saves and **F9** lo
 
 ## Project documentation
 
-Start with the [current handoff](docs/HANDOFF.md) for entry points, source files, tests and remaining tuning. The [survival design](docs/SURVIVAL_DESIGN.md) records the agreed behavior and distinguishes implemented test behavior from future balancing targets.
+Start with the [gameplay overview and documentation index](docs/GAMEPLAY.md) for every implemented loop and its detailed guide. The [current handoff](docs/HANDOFF.md) supports resuming work; [cargo and economy](docs/CARGO.md) covers freight end to end; the [development guide](docs/DEVELOPMENT.md) maps code, saves, tuning and validation. The [survival design](docs/SURVIVAL_DESIGN.md) records agreed rules and superseded proposals.
 
 ## Cargo loop test
 
@@ -34,7 +34,7 @@ Validation: 47 packing assertions across 600 generated manifests, 446 economy as
 
 ---
 
-## Current playable build: Longhaul flight
+## Retained standalone build: Longhaul flight
 
 The default scene is now the detailed Longhaul with physical cockpit command-line terminals, manual station flight, automatic interstation travel, printed checklists and route sheets, shipboard life, and optional docking assistance. On macOS, double-click `Fly Longhaul.command` (Godot installed in Applications).
 

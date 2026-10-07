@@ -100,14 +100,14 @@ An advance is available once before the first departure and is deducted from the
 
 ## Saving and restarting
 
-**F5** saves; **F9** loads the combined session, except on the run-ended screen where it loads the departure checkpoint. `save` and `load` also work at the terminals. Ordinary play autosaves approximately every 45 seconds. Save waits for a running rest or moving hatch/ramp to finish.
+**F5** saves; **F9** loads the combined session, except on the run-ended screen where it loads the departure checkpoint. `save` and `load` also work at the terminals. Ordinary play autosaves approximately every 45 seconds. Save waits for running rest or a moving hatch, ramp, table or bunk drawer to finish. Press F5 before closing if you want to preserve changes since the last autosave.
 
 The combined session has independent files in Godot's `Space Trucking` user-data directory:
 
 - `ship_life_v1.json`: regular combined save.
 - `ship_life_departure_v1.json`: initial/departure recovery checkpoint.
 
-They preserve the shared clock, stores, dishes and cooking, daily checks, sensor condition, emergency allowance and resupply flags, wallet/advance/debt, station economy and cargo reservations, physical cargo positions, flight, cockpit display assignments, carried checklist text/location, and unfinished sensor calibration puzzles. They neither load nor overwrite `longhaul_flight_v1.json`, the original normal-flight save.
+They preserve the shared clock, stores, dishes and cooking, daily checks, sensor condition, emergency allowance and resupply flags, wallet/advance/debt, station economy and cargo reservations, physical cargo positions, flight, cockpit display assignments, carried checklist text/location, unfinished sensor calibration puzzles, and hab table/drawer/light state. They neither load nor overwrite `longhaul_flight_v1.json`, the original normal-flight save.
 
 The launcher resumes an existing combined save. To start a fresh combined test explicitly, launch with the user argument `--ship-life-new`; subsequent saves belong to that fresh combined session. Normal-flight progress remains separate.
 
@@ -130,11 +130,11 @@ The legacy engineering puzzle and legacy automatic supplies service are not the 
 
 ## Verification
 
-Latest completed checks: **116 state, 375 economy, 150 combined integration, and 19 complete-flight checks passed** for the pacing/empty-hands/recycling revision. The new checks include real H/Backspace input events, physical bin targeting, persistent stowing, cargo-tool lifecycle, five-minute clock boundaries, and old-clock save migration. Existing cargo regressions also passed: 47 packing assertions (including 600 generated manifests), 446 economy assertions, and 108 controller assertions.
+Last recorded checks: **170 combined integration and 19 complete-flight checks passed** for the hab-furniture revision; previous state/economy runs passed **116 / 375**. The furniture checks cover independent sitting, real F/G/T input, paper reading while seated, folding clearance, plate interlocks, lowering with food in hand, and old/new save restoration. These results were not rerun for the documentation-only audit. The new checks include real H/Backspace input events, physical bin targeting, persistent stowing, cargo-tool lifecycle, five-minute clock boundaries, and old-clock save migration. Existing cargo regressions also passed: 47 packing assertions (including 600 generated manifests), 446 economy assertions, and 108 controller assertions.
 
 The integration suite exercises the real scene/fixture rays, provisions and cooking, drinking/shower/checks, rest and arrival interruption, cockpit CLI departure and cargo/sensor interlocks, printing, finance, and save restoration. The following flight suite runs actual injection, coast, braking, approach, nose-first autodocking, arrival bookkeeping, animated hatch/ramp opening, unloading, and one-time payment. Some fixture setup and cargo placement use controller methods directly; these are not exclusively input-driven tests. Both suites hash existing normal/combined/checkpoint saves before and after; test writes are redirected into `/tmp`.
 
-Rendered checks confirmed empty hands after stowing, the galley recycling slot and discarded-sheet view, as well as the centered bench seat, carried/enlarged checklist, calibration prompt, and degraded result. Earlier checks also confirmed the hab fixtures, stock terminal, and centered black-screen sleep progress display. Physical interaction checks covered all new fixture rays, the meal/glass workflow, dining-seat exit, and entry into the shower. User playtesting is the next step for pacing and comfort.
+Rendered checks also confirmed independent bench seating and folded/lowered desk geometry. Earlier rendered checks confirmed empty hands after stowing, the galley recycling slot and discarded-sheet view, as well as the centered bench seat, carried/enlarged checklist, calibration prompt, and degraded result. Earlier checks also confirmed the hab fixtures, stock terminal, and centered black-screen sleep progress display. Physical interaction checks covered all new fixture rays, the meal/glass workflow, dining-seat exit, and entry into the shower. User playtesting is the next step for pacing and comfort.
 
 Run from the repository root:
 
