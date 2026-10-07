@@ -6,6 +6,8 @@ The latest visual integration is **Test Station.command** (`scenes/station_trial
 
 ## The game we are making
 
+Station layout requirement (accepted 2026-10-06): every station has at least two full-size hangars. The player's berth remains available for an unrestricted stay; a separate NPC berth supports independent arrivals, cargo work and departures. Approach paths and door control must be independent. The current station has the two physical bay volumes, but NPC berth operation and traffic are not yet implemented.
+
 A single-player, cozy space-delivery game where the ship is home. Earn fixed fees carrying station-owned freight, prepare for the journey, fly manually near stations, let NAV handle interstation travel, and live aboard between ports. Hard-science-fiction influences inform instruments, inertia, route planning and operating costs; usability takes priority over literal scale. There is no combat, inspection loop or delivery deadline.
 
 The setting is Aurel, a ringed gas giant with eight moons and fifteen orbital stations. Longhaul is the current player ship, with cockpit, living hab, washroom/airlock, cargo, engineering and loading areas. Compact cassette-futurist hardware, useful wall equipment, readable CRTs and safe working clearances define the visual style. A future hull redesign should preserve the gameplay independently of the artwork.

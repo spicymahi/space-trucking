@@ -4,6 +4,8 @@ Updated 2026-10-06. Read this first when resuming; then read the guide for the a
 
 ## Where the project stands
 
+Latest user review: station gameplay works well. New accepted requirement: every station needs at least two full-size hangars, with a player berth and an independently usable NPC berth so unlimited player dwell time cannot block NPC work. Existing BAY 02 is still closed visual art; NPC operations remain planned. [The second station concept](station-concepts/2026-10-06/twin-bay-depot/README.md) is a compact cream/blue resupply depot, awaiting visual approval before modeling.
+
 Godot 4.7.2, GDScript, macOS playtesting. Repository: https://github.com/spicymahi/space-trucking. Main is the working branch. Current ship visuals include imported Blender Longhaul assets; the old handoff’s code-only-art description is obsolete.
 
 Setting: Aurel, a ringed gas giant, eight moons, fifteen stations. Cozy cassette futurism, ship as home, no violence or delivery deadlines. User may redesign the ship later; preserve gameplay independently of the hull/art.
