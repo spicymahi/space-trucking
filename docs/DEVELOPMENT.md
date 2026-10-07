@@ -6,6 +6,8 @@ Audited 2026-10-06. Read [HANDOFF.md](HANDOFF.md), then [GAMEPLAY.md](GAMEPLAY.m
 
 Godot 4.7.2, GDScript, macOS. `project.godot` currently selects the Mobile renderer and `scenes/longhaul_flight.tscn` as its main scene. Launchers live at the repository root; current combined play is **Test Ship Life.command**. Other launchers preserve standalone flight, cargo-only tests and historical room/life prototypes.
 
+**Test Station.command** / `scenes/station_trial.tscn` is the newer Blender station integration, derived from the full combined session. It deliberately has its own save paths and keeps the original launcher/baseline intact. [STATION_TEST.md](STATION_TEST.md) contains the player guide and station validation commands.
+
 `ship_life_trial.gd` extends `cargo_trial.gd`. Its `_create_ship()` supplies `ship_life_flight.gd`, which extends `longhaul_flight.gd` to build the existing ship/cockpit/space presentation without starting the legacy gameplay loop or loading its save. The bridge hands the combined walker/camera to the ship and disables the legacy frame/input drivers. Do not enable both controllers: that would double-advance state and dispatch inputs twice.
 
 | System | Principal source / integration points |
@@ -21,6 +23,8 @@ Godot 4.7.2, GDScript, macOS. `project.godot` currently selects the Mobile rende
 | Physical daily paper | `scripts/ship_life_paper.gd`; collection/stow/inspection/disposal state in combined controller |
 | Hab / fixtures | `scripts/ship_life_visuals.gd` creates active fixtures, kitchen props, printer/bin, shower; `longhaul_hab.gd` owns furniture mechanics |
 | Ship mechanics / art | `longhaul_cockpit.gd`, `longhaul_service.gd`, `longhaul_loading.gd`, other `longhaul_*` room builders; `longhaul_blender_assets.gd` binds imported visuals |
+| Station integration | `station_trial.gd` overrides dock construction, service mapping, doors, save paths and trial guide; `station_hangar.gd` binds imported art, live CRTs, grids, walking collision and lights |
+| Station flight / art | `station_trial_flight.gd`, `station_trial_flight_state.gd`, `station_trial_system_visuals.gd`; standalone and original combined flight adapters stay unchanged |
 
 The flight bridge derives secured cargo and cargo mass from the combined manifest, and sensor readiness from the survival model. It fixes legacy coolant at 0.82; the old coolant puzzle is not the current maintenance loop. Actual fuel use belongs to flight, not economic arrival bookkeeping. `_arrived()` advances the contracted leg only on actual docking and spawns pickup cargo only for the collection pickup transition.
 
@@ -33,6 +37,8 @@ On this Mac, Godot `user://` resolves beneath `~/Library/Application Support/God
 | `ship_life_v1.json` | Persistent combined session; normal launcher resumes it |
 | `ship_life_departure_v1.json` | Initial/pre-departure recovery checkpoint; F9 uses it after an emergency-rest run end |
 | `longhaul_flight_v1.json` | Independent standalone flight save; never overwrite it to test combined gameplay |
+| `station_trial_v1.json` | Independent persistent Blender station session |
+| `station_trial_departure_v1.json` | Station trial's initial/pre-departure recovery checkpoint |
 
 F5 saves, F9 loads, terminals support `save`/`load`, and normal combined play attempts autosave every 45 seconds. Save explicitly before closing when recent progress matters. Saving refuses active rest or moving ramp, hatch, table or drawer. A `.tmp` file is written before rename; the success message depends on the rename result. Do not reset saves just to reopen the game. `--ship-life-new` intentionally starts a fresh combined session and subsequent saves replace its regular progress; use only when requested.
 
@@ -43,6 +49,16 @@ Version 1's top-level snapshot includes `life`, `economy`, `flight`, manifest an
 Existing version-1 saves default new paper/calibration fields, and absent `hab` data means lowered table, closed drawer and light on. Restoring furniture stops pending tweens before applying final poses; an occupied table is kept lowered. Old-clock economic saves keep elapsed progress, accepted fees, wallet and debt while refreshing future route estimates and expiring unsold cached offers. The combined session does not import the standalone flight save.
 
 Terminal browsing history and open panels are transient; screen roles/map choices and actual gameplay state persist. History navigation must not replay actions. A route sheet is a printed snapshot; the current-day daily checklist updates completion, and old-day sheets remain old until replaced.
+
+Station tests/captures map their `user://` writes to `/tmp/station-integration-*` or `/tmp/station-capture-*`. The station controller inherits the version-1 combined snapshot format. Door fraction is transient and reconstructed from the restored flight phase; stale docked departure requests are cleared. Never copy the legacy combined save into the station trial implicitly: physical floor height and berth heading differ.
+
+## Station coordinates and asset boundary
+
+The flight model's `station_position()` is BAY 01's docked ship origin, preserving the orbital catalogue. `ship.station_frame(index)` converts that fixed station frame to the ship's floating local frame. The canonical floor-root offset is `(0,-1.315,0)`; station structure shifts `(27,-1.315,0)` to align its authored left bay, and the second bay is `(54,-1.315,0)`. Godot −Z is the ship nose, +Z is the entrance/departure side. The runtime and detailed exterior use `nearby_station_id()`, not NAV's reference station: NAV changes its reference at engagement while the departure port must remain visibly stationary behind the ship.
+
+The adapter's departure preparation requests the outer door; actual release waits for full clearance. The flight state uses swept conservative bounds for ship/major-structure clearance, independent from the player's simple runtime colliders. Autodock stages are approach gate, level hover through the aperture, then descent. Keep the bay geometry, door bounds, cargo anchors, flight safety volumes and ramp angle in agreement when changing dimensions. The state initializer must call `super._init()` so the new ship starts at the station's orbital position, not world zero.
+
+`assets/stations/industrial_keel/standard_hangar.glb` is the single canonical room; `station_structure.glb` excludes bays, and `station_distant.glb` contains the simplified exterior with both bay shells. `bindings.json` records door/screen/marker coordinates. `art/station_kit_v1/export_game.py` rebuilds these from the editable Blender model without reference ships, cameras, sample cargo or presentation animation. All fifteen locations currently share this family as test artwork; their economy and industry data are unchanged.
 
 ## Tuning and change safety
 
@@ -71,6 +87,14 @@ Run appropriate suites from the repository root:
 ```
 
 The last command runs combined integration then the actual flight/delivery suite. It hashes existing save files before/after and redirects combined user save writes into `/tmp`; some setup/packing uses controller calls rather than exclusively real keyboard input. It exercises fixtures, dishes, paper, seated furniture, clearance, migration, calibration, money, rest, departure interlocks, physical flight, docking, unloading and single payment.
+
+For the station build, use its dedicated suite rather than running the legacy fixture on the different hangar geometry:
+
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path . --log-file /tmp/station-trial-test.log res://scenes/station_trial.tscn -- --station-trial-test --ship-life-new
+```
+
+Do not combine `--station-trial-test` and `--ship-life-test`; they dispatch separate suites. The station suite checks physical terminal aim/F, walked ramp routes with cargo, door interlock, a real solver-driven delivery and all five save files' preservation. Latest station integration run on 2026-10-06 passed **63/63**, and the retained combined baseline passed fresh **170/170 integration + 19/19 actual-flight checks**. Blender geometry passed **60/60** after the floor correction. See [STATION_TEST.md](STATION_TEST.md) for the five actual Godot capture views and their command. Warm static-camera frame measurements are diagnostics only, not a substitute for interactive flight/cargo performance testing.
 
 For packing/economic/controller changes, also use:
 

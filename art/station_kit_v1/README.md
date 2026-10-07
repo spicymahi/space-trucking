@@ -57,7 +57,7 @@ Run `build_station.py` in a **fresh** Blender background process with `--factory
 /Applications/Blender.app/Contents/MacOS/Blender --background art/station_kit_v1/industrial_keel_and_hangar.blend --python art/station_kit_v1/validate_station.py
 ```
 
-**59/59 Blender geometry checks passed.** `validation.json` records finite geometry, open entrance, straight-in swept ship clearance, landing envelope, all 24 cargo-grid clearances, sampled player capsule routes, closed/mid/open door clearances, leaf separation, grounded ship feet and shared bay instances. Walking checks use the current 0.35 m player radius and 1.8 m height; they validate planned paths against static art geometry, not Godot physics. Fixed equipment must stay outside those volumes. This does not claim functional gameplay validation before import.
+**60/60 Blender geometry checks passed.** `validation.json` records finite geometry, open entrance, straight-in swept ship clearance, landing envelope, all 24 cargo-grid clearances, sampled player capsule routes, closed/mid/open door clearances, leaf separation, grounded ship feet and shared bay instances. A surface-order regression check ensures the structural slab stays below the visible gray deck plates (corrected during Godot integration). Walking checks use the current 0.35 m player radius and 1.8 m height; they validate planned paths against static art geometry, not Godot physics. Fixed equipment must stay outside those volumes. This does not claim functional gameplay validation before import.
 
 The live Blender state that existed before this task was preserved separately at `/tmp/longhaul-before-station-review.blend`. The original editable Longhaul and production GLB were not overwritten.
 

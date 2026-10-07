@@ -71,7 +71,7 @@ func _ready() -> void:
 	economy.setup()
 	ship = _create_ship()
 	add_child(ship)
-	dock = Art.dock(self)
+	dock = _create_dock()
 	floor_packing.grid = FLOOR_GRID
 	floor_packing.bin_count = stage_positions.size() + dock.pickup_positions.size() + dock.drop_positions.size()
 	floor_packing.open_sides.assign([Vector3i.LEFT, Vector3i.RIGHT, Vector3i.FORWARD, Vector3i.BACK])
@@ -89,6 +89,9 @@ func _ready() -> void:
 		_run_tests.call_deferred()
 	elif "--cargo-trial-capture" in OS.get_cmdline_user_args():
 		_capture.call_deferred()
+
+func _create_dock() -> Dictionary:
+	return Art.dock(self)
 
 func _create_ship() -> Node3D:
 	return TrialShip.new()
@@ -217,7 +220,7 @@ func _physics_process(delta: float) -> void:
 	var move:=Vector3.ZERO
 	if not panel.visible and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
 		move=Vector3(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),0,float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
-	if "--cargo-trial-test" in OS.get_cmdline_user_args():move=test_walk_input
+	if "--cargo-trial-test" in OS.get_cmdline_user_args() or "--station-trial-test" in OS.get_cmdline_user_args():move=test_walk_input
 	move=walker.basis*move.normalized()
 	var speed:=3.7 if Input.is_physical_key_pressed(KEY_SHIFT) and held<0 else 2.4
 	walker.velocity.x=move.x*speed;walker.velocity.z=move.z*speed

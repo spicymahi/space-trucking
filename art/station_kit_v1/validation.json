@@ -7,6 +7,14 @@
       "details": null
     },
     {
+      "check": "Gray deck plates remain above structural substrate",
+      "passed": true,
+      "details": {
+        "plate_top_m": -0.0010000001639127731,
+        "substrate_top_m": -0.07000000029802322
+      }
+    },
+    {
       "check": "Open doorway clear: 18 m wide and 9 m high above sill",
       "passed": true,
       "details": []
@@ -145,8 +153,8 @@
       "check": "1.8 m person / central cargo walkway",
       "passed": true,
       "details": {
-        "radius_clearance_m": 0.39,
-        "nearest": "01 Deck and cargo markings / Deck substrate / frame"
+        "radius_clearance_m": 0.3916,
+        "nearest": "01 Deck and cargo markings / Deck plates / deck"
       }
     },
     {
@@ -338,8 +346,8 @@
       "details": null
     }
   ],
-  "passed": 59,
-  "total": 59,
+  "passed": 60,
+  "total": 60,
   "hangar_evaluated_triangles": 294020,
   "ship_bounds_m": {
     "min": [

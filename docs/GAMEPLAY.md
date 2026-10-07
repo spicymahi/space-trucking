@@ -2,6 +2,8 @@
 
 Audited against the implementation on 2026-10-06. The core flight, cargo, survival and daily ship-care loops are implemented in **Test Ship Life.command** (`scenes/ship_life_trial.tscn`). They have been playtested by the user; this is a playable integrated prototype, not a claim that production art, balance or every proposed feature is finished.
 
+The latest visual integration is **Test Station.command** (`scenes/station_trial.tscn`): the same full loops inside the approved Blender industrial station and reusable hangar. It has separate station-trial saves and retains the original combined build. See [STATION_TEST.md](STATION_TEST.md) for the new physical door, reverse departure, nose-first landing and service-counter layout.
+
 ## The game we are making
 
 A single-player, cozy space-delivery game where the ship is home. Earn fixed fees carrying station-owned freight, prepare for the journey, fly manually near stations, let NAV handle interstation travel, and live aboard between ports. Hard-science-fiction influences inform instruments, inertia, route planning and operating costs; usability takes priority over literal scale. There is no combat, inspection loop or delivery deadline.
@@ -26,7 +28,7 @@ Collection contracts add an empty first leg to the supplier, then the same loadi
 
 ## Current build versus retained prototypes
 
-The project default is still `scenes/longhaul_flight.tscn`. Use **Test Ship Life.command** for all current loops together; pressing Play on the default project opens the older standalone flight build.
+The project default is still `scenes/longhaul_flight.tscn`. Use **Test Station.command** for all loops with the new Blender hangar, or **Test Ship Life.command** for the previously approved combined baseline. Pressing Play on the default project opens the older standalone flight build. The station trial keeps all fifteen industries and routes but provisionally shares one industrial exterior across them; it does not add new industry rules.
 
 | Concern | Combined ship-life session | Older standalone flight / cargo trial |
 | --- | --- | --- |
@@ -46,6 +48,7 @@ The shared cockpit guide documents navigation, screens, paper, map and docking. 
 | --- | --- |
 | [HANDOFF.md](HANDOFF.md) | First read for a new coding session: current state, entry points and continuation notes |
 | [SHIP_LIFE_TEST.md](SHIP_LIFE_TEST.md) | End-to-end player walkthrough, terminal commands, kitchen, paper, sensors, rest, money and saves |
+| [STATION_TEST.md](STATION_TEST.md) | Blender station launch, physical hangar/door, service layout, departure/arrival differences, isolated saves and validation commands |
 | [CARGO.md](CARGO.md) | Contract/economy rules, packing, staging, locks, unloading, payment and implementation ownership |
 | [FLIGHT.md](FLIGHT.md) | Cockpit controls, engine/ATC sequence, transcription, instruments, flight paper, inertia, NAV, docking |
 | [AUREL_SYSTEM.md](AUREL_SYSTEM.md) | Planet/moon/station directory, schematic map commands, route geography and simulation limits |
@@ -63,6 +66,6 @@ The shared cockpit guide documents navigation, screens, paper, map and docking. 
 - Cargo is manually carried; no trolley, speculative trading or paid loading crew is available in the combined session. Cases currently have rectangular grid dimensions, not arbitrary interlocking mesh shapes.
 - Sensor inspection/port repair replaces the old coolant-repair loop in the combined session. It does not yet simulate individual physical ship parts failing during flight; the bridge holds legacy coolant at 0.82 and uses sensor failure as a departure gate.
 - Slower time supersedes the earlier multi-day journey target. Existing flight times remain roughly 5–30 real minutes; the longest initial combined quote is around 11.5 shipboard hours. Pantry stock therefore covers multiple jobs. Further balancing is a decision, not an undocumented change to make while resuming.
-- Core loops being complete does not automatically switch the default scene, migrate old saves, redesign the hull, or expand station interiors. These remain separate future work.
+- The industrial station's playable hangar is implemented in its dedicated test scene. Other station interiors, station-family artwork and NPC bay traffic remain future work. Core-loop completion does not switch the default scene, migrate saves or redesign the ship hull.
 
 When a rule changes, update its detailed guide, this overview if scope changes, and the handoff. Keep implemented behavior, user decisions, proposals and historical behavior clearly distinguished.

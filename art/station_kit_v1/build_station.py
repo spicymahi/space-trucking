@@ -116,7 +116,9 @@ setup_scene(S)
 
 # HANGAR metric envelope: X +-14 m, Y -33..19 m, Z 0..10 m.
 # All cargo grids retain the current 45 cm pitch and twelve pads per side.
-box(FLOOR,'frame',(0,-7,-.36),(31,56,.72),part='Deck substrate')
+# Keep the structural substrate below the gray deck plates. Its former top at
+# Z=0 covered every plate (plate tops are Z=-.001), exposing the dark frame.
+box(FLOOR,'frame',(0,-7,-.43),(31,56,.72),part='Deck substrate')
 for ix in range(14):
     for iy in range(26):
         x=-13+ix*2;y=-32+iy*2

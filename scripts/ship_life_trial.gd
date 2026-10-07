@@ -62,7 +62,7 @@ func _ready() -> void:
 		_run_life_tests.call_deferred()
 	elif "--ship-life-capture" in args:
 		_capture_life.call_deferred()
-	elif FileAccess.file_exists(LIFE_SAVE) and "--ship-life-new" not in args:
+	elif FileAccess.file_exists(_save_path(LIFE_SAVE)) and "--ship-life-new" not in args:
 		message(load_life())
 	else:
 		save_life(CHECKPOINT)
@@ -122,9 +122,9 @@ func _physics_process(delta:float) -> void:
 		thrust=Vector3(ship.key(KEY_D)-ship.key(KEY_A),ship.key(KEY_SPACE)-ship.key(KEY_CTRL),ship.key(KEY_S)-ship.key(KEY_W))
 		rotation_input=Vector3(ship.key(KEY_UP)-ship.key(KEY_DOWN),ship.key(KEY_LEFT)-ship.key(KEY_RIGHT),ship.key(KEY_Q)-ship.key(KEY_E))
 		if Input.is_physical_key_pressed(KEY_SHIFT):thrust*=0.12;rotation_input*=0.25
-	if "--ship-life-test" not in OS.get_cmdline_user_args():_advance_simulation(delta,thrust,rotation_input,piloting and Input.is_physical_key_pressed(KEY_X))
+	if ("--ship-life-test" not in OS.get_cmdline_user_args() and "--station-trial-test" not in OS.get_cmdline_user_args()):_advance_simulation(delta,thrust,rotation_input,piloting and Input.is_physical_key_pressed(KEY_X))
 	autosave_seconds+=delta
-	if autosave_seconds>=45 and "--ship-life-test" not in OS.get_cmdline_user_args():
+	if autosave_seconds>=45 and ("--ship-life-test" not in OS.get_cmdline_user_args() and "--station-trial-test" not in OS.get_cmdline_user_args()):
 		autosave_seconds=0;save_life()
 
 func _advance_simulation(seconds:float,thrust:=Vector3.ZERO,rotation_input:=Vector3.ZERO,stop:=false) -> float:

@@ -1,0 +1,65 @@
+{
+  "standard_hangar": {
+    "file": "standard_hangar.glb",
+    "bytes": 24591728,
+    "meshes": 12,
+    "triangles": 440724,
+    "nodes": 53,
+    "materials": 14,
+    "draw_surfaces": 42,
+    "godot_bounds": {
+      "min": [
+        -15.620001,
+        -0.825001,
+        -21.915001
+      ],
+      "max": [
+        15.620001,
+        12.650001,
+        35.809998
+      ]
+    }
+  },
+  "station_structure": {
+    "file": "station_structure.glb",
+    "bytes": 7237588,
+    "meshes": 1,
+    "triangles": 133218,
+    "nodes": 4,
+    "materials": 10,
+    "draw_surfaces": 10,
+    "godot_bounds": {
+      "min": [
+        -74.0,
+        -13.0,
+        -62.0
+      ],
+      "max": [
+        110.5,
+        62.0,
+        35.390598
+      ]
+    }
+  },
+  "station_distant": {
+    "file": "station_distant.glb",
+    "bytes": 1531052,
+    "meshes": 3,
+    "triangles": 29684,
+    "nodes": 4,
+    "materials": 9,
+    "draw_surfaces": 25,
+    "godot_bounds": {
+      "min": [
+        -74.0,
+        -13.0,
+        -62.0
+      ],
+      "max": [
+        110.5,
+        62.0,
+        35.809998
+      ]
+    }
+  }
+}

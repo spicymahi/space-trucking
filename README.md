@@ -1,3 +1,13 @@
+## Blender station playtest
+
+Double-click **[Test Station.command](Test%20Station.command)** to play the complete cargo, flight and survival loop inside the approved Blender station and hangar. Start at the **CONTRACTS** screen; press **F** to use it and **F1** for the walkthrough. The dispatch counter also provides provisions, repairs, fuel and delivery completion. [Station playtest guide](docs/STATION_TEST.md).
+
+The ship and cargo use their existing scale. Walk the loading ramp, pack and lock freight, open the station door through COMMS, fly out, travel and dock nose-first into the destination hangar. All fifteen economy locations currently share this first station family. This session saves separately from the older builds.
+
+Actual Godot viewport:
+
+![Blender hangar in Godot](docs/screenshots/station_hangar.png)
+
 ## Complete ship-life test
 
 Launch **[Test Ship Life.command](Test%20Ship%20Life.command)** for the combined cargo, original cockpit/manual flight, and survival session. It starts at the dock with contracts, a PROVISIONS kiosk and a repair technician. Press **F1** in game for the walkthrough, or read the [complete test guide](docs/SHIP_LIFE_TEST.md).

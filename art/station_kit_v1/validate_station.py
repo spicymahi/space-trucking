@@ -22,6 +22,11 @@ def meshes(objects):
     return verts,faces,owners
 verts,faces,owners=meshes(kit.all_objects)
 check(all(math.isfinite(a) for v in verts for a in v),'Finite hangar geometry')
+substrate=[o for o in kit.all_objects if 'Deck substrate' in o.name]
+plates=[o for o in kit.all_objects if 'Deck plates' in o.name]
+substrate_top=max((o.matrix_world@v.co).z for o in substrate for v in o.data.vertices)
+plate_top=min(max((o.matrix_world@v.co).z for v in o.data.vertices) for o in plates)
+check(plate_top>substrate_top+.02,'Gray deck plates remain above structural substrate',{'plate_top_m':plate_top,'substrate_top_m':substrate_top})
 tree=BVHTree.FromPolygons(verts,faces,all_triangles=True)
 def cube(lo,hi):
     a,b,c=lo;x,y,z=hi

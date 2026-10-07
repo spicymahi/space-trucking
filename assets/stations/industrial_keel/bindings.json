@@ -1,0 +1,584 @@
+{
+  "units": "metres",
+  "coordinate_system": "Godot: Y up, ship nose -Z",
+  "blender_to_godot": [
+    "x",
+    "z",
+    "-y"
+  ],
+  "game_root_offset": [
+    0,
+    -1.315,
+    0
+  ],
+  "hangar_clear_bounds": {
+    "min": [
+      -14,
+      0,
+      -19
+    ],
+    "max": [
+      14,
+      10,
+      33
+    ]
+  },
+  "door_clear_bounds": {
+    "min": [
+      -9,
+      0,
+      33
+    ],
+    "max": [
+      9,
+      9,
+      35
+    ]
+  },
+  "bay_origins": [
+    [
+      -27,
+      0,
+      0
+    ],
+    [
+      27,
+      0,
+      0
+    ]
+  ],
+  "doors": [
+    {
+      "node": "HangarDoorLeaf_1",
+      "closed_position": [
+        0.0,
+        1.125,
+        34.700001
+      ],
+      "open_position": [
+        0.0,
+        10.6,
+        34.700001
+      ],
+      "size_m": [
+        17.95,
+        2.235,
+        0.5
+      ]
+    },
+    {
+      "node": "HangarDoorLeaf_2",
+      "closed_position": [
+        0.0,
+        3.375,
+        34.200001
+      ],
+      "open_position": [
+        0.0,
+        10.6,
+        34.200001
+      ],
+      "size_m": [
+        17.95,
+        2.235,
+        0.5
+      ]
+    },
+    {
+      "node": "HangarDoorLeaf_3",
+      "closed_position": [
+        0.0,
+        5.625,
+        33.700001
+      ],
+      "open_position": [
+        0.0,
+        10.6,
+        33.700001
+      ],
+      "size_m": [
+        17.95,
+        2.235,
+        0.5
+      ]
+    },
+    {
+      "node": "HangarDoorLeaf_4",
+      "closed_position": [
+        0.0,
+        7.875,
+        33.200001
+      ],
+      "open_position": [
+        0.0,
+        10.6,
+        33.200001
+      ],
+      "size_m": [
+        17.95,
+        2.235,
+        0.5
+      ]
+    }
+  ],
+  "screens": {
+    "depart": {
+      "node": "Screen_depart",
+      "front_center": [
+        -3.4,
+        1.46,
+        17.997
+      ],
+      "size_m": [
+        0.72,
+        0.41
+      ],
+      "plane_rotation_degrees": [
+        0,
+        0,
+        0
+      ]
+    },
+    "contracts": {
+      "node": "Screen_contracts",
+      "front_center": [
+        11.048,
+        1.52,
+        7.5
+      ],
+      "size_m": [
+        0.77,
+        0.53
+      ],
+      "plane_rotation_degrees": [
+        0,
+        -90,
+        0
+      ]
+    },
+    "provisions": {
+      "node": "Screen_provisions",
+      "front_center": [
+        11.048,
+        1.52,
+        9.300000190734863
+      ],
+      "size_m": [
+        0.77,
+        0.53
+      ],
+      "plane_rotation_degrees": [
+        0,
+        -90,
+        0
+      ]
+    },
+    "repairs": {
+      "node": "Screen_repairs",
+      "front_center": [
+        11.048,
+        1.52,
+        11.100000381469727
+      ],
+      "size_m": [
+        0.77,
+        0.53
+      ],
+      "plane_rotation_degrees": [
+        0,
+        -90,
+        0
+      ]
+    },
+    "refuel": {
+      "node": "Screen_refuel",
+      "front_center": [
+        11.048,
+        1.52,
+        12.899999618530273
+      ],
+      "size_m": [
+        0.77,
+        0.53
+      ],
+      "plane_rotation_degrees": [
+        0,
+        -90,
+        0
+      ]
+    },
+    "complete": {
+      "node": "Screen_complete",
+      "front_center": [
+        11.048,
+        1.52,
+        14.700000762939453
+      ],
+      "size_m": [
+        0.77,
+        0.53
+      ],
+      "plane_rotation_degrees": [
+        0,
+        -90,
+        0
+      ]
+    }
+  },
+  "markers": {
+    "PICKUP_01": {
+      "position": [
+        -6.25,
+        0.0,
+        20.15
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_02": {
+      "position": [
+        -8.85,
+        0.0,
+        20.15
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_03": {
+      "position": [
+        -11.45,
+        0.0,
+        20.15
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_04": {
+      "position": [
+        -6.25,
+        0.0,
+        22.700001
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_05": {
+      "position": [
+        -8.85,
+        0.0,
+        22.700001
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_06": {
+      "position": [
+        -11.45,
+        0.0,
+        22.700001
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_07": {
+      "position": [
+        -6.25,
+        0.0,
+        25.25
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_08": {
+      "position": [
+        -8.85,
+        0.0,
+        25.25
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_09": {
+      "position": [
+        -11.45,
+        0.0,
+        25.25
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_10": {
+      "position": [
+        -6.25,
+        0.0,
+        27.799999
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_11": {
+      "position": [
+        -8.85,
+        0.0,
+        27.799999
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_12": {
+      "position": [
+        -11.45,
+        0.0,
+        27.799999
+      ],
+      "binding": "pickup_grid"
+    },
+    "DELIVERY_01": {
+      "position": [
+        4.45,
+        0.0,
+        20.15
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_02": {
+      "position": [
+        7.05,
+        0.0,
+        20.15
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_03": {
+      "position": [
+        9.65,
+        0.0,
+        20.15
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_04": {
+      "position": [
+        4.45,
+        0.0,
+        22.700001
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_05": {
+      "position": [
+        7.05,
+        0.0,
+        22.700001
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_06": {
+      "position": [
+        9.65,
+        0.0,
+        22.700001
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_07": {
+      "position": [
+        4.45,
+        0.0,
+        25.25
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_08": {
+      "position": [
+        7.05,
+        0.0,
+        25.25
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_09": {
+      "position": [
+        9.65,
+        0.0,
+        25.25
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_10": {
+      "position": [
+        4.45,
+        0.0,
+        27.799999
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_11": {
+      "position": [
+        7.05,
+        0.0,
+        27.799999
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_12": {
+      "position": [
+        9.65,
+        0.0,
+        27.799999
+      ],
+      "binding": "delivery_grid"
+    },
+    "TERMINAL_CONTRACTS": {
+      "position": [
+        10.84,
+        1.48,
+        7.5
+      ],
+      "binding": "contracts"
+    },
+    "TERMINAL_PROVISIONS": {
+      "position": [
+        10.84,
+        1.48,
+        9.3
+      ],
+      "binding": "provisions"
+    },
+    "TERMINAL_REPAIRS": {
+      "position": [
+        10.84,
+        1.48,
+        11.1
+      ],
+      "binding": "repairs"
+    },
+    "TERMINAL_REFUEL": {
+      "position": [
+        10.84,
+        1.48,
+        12.9
+      ],
+      "binding": "refuel"
+    },
+    "TERMINAL_COMPLETE": {
+      "position": [
+        10.84,
+        1.48,
+        14.7
+      ],
+      "binding": "complete"
+    },
+    "TERMINAL_DEPARTURE": {
+      "position": [
+        -3.4,
+        1.45,
+        18.049999
+      ],
+      "binding": "depart"
+    },
+    "CREW_ACCESS": {
+      "position": [
+        12.0,
+        0.0,
+        26.0
+      ],
+      "binding": "future_station_connection"
+    },
+    "SHIP_DOCK_ORIGIN": {
+      "position": [
+        0.0,
+        1.315,
+        -0.0
+      ],
+      "binding": "ship_root"
+    },
+    "APPROACH_GATE": {
+      "position": [
+        0.0,
+        3.315,
+        45.0
+      ],
+      "binding": "approach_gate"
+    },
+    "TOUCHDOWN": {
+      "position": [
+        0.0,
+        1.315,
+        -0.0
+      ],
+      "binding": "touchdown"
+    },
+    "RAMP_CLEARANCE": {
+      "position": [
+        0.0,
+        0.0,
+        16.799999
+      ],
+      "binding": "keep_clear"
+    }
+  },
+  "assets": {
+    "standard_hangar": {
+      "file": "standard_hangar.glb",
+      "bytes": 24591728,
+      "meshes": 12,
+      "triangles": 440724,
+      "nodes": 53,
+      "materials": 14,
+      "draw_surfaces": 42,
+      "godot_bounds": {
+        "min": [
+          -15.620001,
+          -0.825001,
+          -21.915001
+        ],
+        "max": [
+          15.620001,
+          12.650001,
+          35.809998
+        ]
+      }
+    },
+    "station_structure": {
+      "file": "station_structure.glb",
+      "bytes": 7237588,
+      "meshes": 1,
+      "triangles": 133218,
+      "nodes": 4,
+      "materials": 10,
+      "draw_surfaces": 10,
+      "godot_bounds": {
+        "min": [
+          -74.0,
+          -13.0,
+          -62.0
+        ],
+        "max": [
+          110.5,
+          62.0,
+          35.390598
+        ]
+      }
+    },
+    "station_distant": {
+      "file": "station_distant.glb",
+      "bytes": 1531052,
+      "meshes": 3,
+      "triangles": 29684,
+      "nodes": 4,
+      "materials": 9,
+      "draw_surfaces": 25,
+      "godot_bounds": {
+        "min": [
+          -74.0,
+          -13.0,
+          -62.0
+        ],
+        "max": [
+          110.5,
+          62.0,
+          35.809998
+        ]
+      }
+    }
+  },
+  "excluded": [
+    "reference ship and ramp",
+    "example cargo",
+    "human scale figure",
+    "review cameras",
+    "all Blender lights",
+    "demonstration animations",
+    "fake terminal screen text"
+  ]
+}

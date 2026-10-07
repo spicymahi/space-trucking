@@ -1,0 +1,114 @@
+{
+  "screen_uv_checks": [
+    {
+      "name": "Screen_complete",
+      "outward_normal": [
+        -1,
+        0,
+        0
+      ],
+      "uv_bottom_left": [
+        0,
+        1
+      ],
+      "uv_top_right": [
+        1,
+        0
+      ],
+      "status": "pass"
+    },
+    {
+      "name": "Screen_contracts",
+      "outward_normal": [
+        -1,
+        0,
+        0
+      ],
+      "uv_bottom_left": [
+        0,
+        1
+      ],
+      "uv_top_right": [
+        1,
+        0
+      ],
+      "status": "pass"
+    },
+    {
+      "name": "Screen_depart",
+      "outward_normal": [
+        0,
+        0,
+        1
+      ],
+      "uv_bottom_left": [
+        0,
+        1
+      ],
+      "uv_top_right": [
+        1,
+        0
+      ],
+      "status": "pass"
+    },
+    {
+      "name": "Screen_provisions",
+      "outward_normal": [
+        -1,
+        0,
+        0
+      ],
+      "uv_bottom_left": [
+        0,
+        1
+      ],
+      "uv_top_right": [
+        1,
+        0
+      ],
+      "status": "pass"
+    },
+    {
+      "name": "Screen_refuel",
+      "outward_normal": [
+        -1,
+        0,
+        0
+      ],
+      "uv_bottom_left": [
+        0,
+        1
+      ],
+      "uv_top_right": [
+        1,
+        0
+      ],
+      "status": "pass"
+    },
+    {
+      "name": "Screen_repairs",
+      "outward_normal": [
+        -1,
+        0,
+        0
+      ],
+      "uv_bottom_left": [
+        0,
+        1
+      ],
+      "uv_top_right": [
+        1,
+        0
+      ],
+      "status": "pass"
+    }
+  ],
+  "door_roots": 4,
+  "marker_count": 35,
+  "gltf_document_import": "passed all three assets with Godot 4.7.2",
+  "references_excluded": true,
+  "floor_plate_top_m": -0.001,
+  "floor_substrate_top_m": -0.07,
+  "floor_surface_order": "corrected in Blender source, builder and exports",
+  "blender_clearance_checks": "60/60 passed"
+}
