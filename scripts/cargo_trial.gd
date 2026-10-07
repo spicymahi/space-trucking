@@ -6,6 +6,7 @@ const Art = preload("res://scripts/cargo_trial_visuals.gd")
 const System = preload("res://scripts/longhaul_system.gd")
 const FONT = preload("res://assets/fonts/VT323-Regular.ttf")
 const CELL := Packing.CELL
+const FLOOR_GRID := Vector3i(4, 3, 4)
 
 class TrialShip extends "res://scripts/longhaul_flight.gd":
 	func _ready() -> void:
@@ -28,12 +29,12 @@ class TrialShip extends "res://scripts/longhaul_flight.gd":
 	func _unhandled_input(_event: InputEvent) -> void: pass
 
 var packing := Packing.new()
+var floor_packing := Packing.new()
 var economy := Economy.new()
 var ship: Node3D
 var dock: Dictionary
 var racks: Array[Node3D] = []
 var stage_positions := [Vector3(-1.9,0.05,0.65), Vector3(1.9,0.05,0.65), Vector3(-1.9,0.05,6.0), Vector3(1.9,0.05,6.0)]
-var staging: Array[int] = [-1,-1,-1,-1]
 var parcels: Dictionary = {}
 var cases: Dictionary = {}
 var jobs: Array = []
@@ -71,6 +72,10 @@ func _ready() -> void:
 	ship = TrialShip.new()
 	add_child(ship)
 	dock = Art.dock(self)
+	floor_packing.grid = FLOOR_GRID
+	floor_packing.bin_count = stage_positions.size() + dock.pickup_positions.size() + dock.drop_positions.size()
+	floor_packing.open_sides.assign([Vector3i.LEFT, Vector3i.RIGHT, Vector3i.FORWARD, Vector3i.BACK])
+	floor_packing.area_name = "floor grid"
 	_build_racks()
 	_build_player()
 	_build_ui()
@@ -100,9 +105,8 @@ func _build_racks() -> void:
 	for i in stage_positions.size():
 		var at: Vector3 = stage_positions[i]
 		Art.box(self,at-Vector3(0,0.025,0),Vector3(1.84,0.035,1.84),Color("393b35"))
-		for x in [-0.92,0.92]:Art.box(self,at+Vector3(x,0,0),Vector3(0.025,0.012,1.84),Color("c89c52"))
-		for z in [-0.92,0.92]:Art.box(self,at+Vector3(0,0,z),Vector3(1.84,0.012,0.025),Color("c89c52"))
-		var text := Art.label(self,"STAGING %d / CLEAR BEFORE FLIGHT" % (i+1),at+Vector3(0,0.012,0),0.0013)
+		Art.floor_grid(self,at,Color("c89c52"))
+		var text := Art.label(self,"STAGING %d / 3 LAYERS / CLEAR FOR FLIGHT" % (i+1),at+Vector3(0,0.012,0.99),0.0010)
 		text.rotation.x = -PI/2
 	var console := Node3D.new()
 	add_child(console)
@@ -201,7 +205,7 @@ func _process(delta: float) -> void:
 		economy.tick(0.10);economy_timer=0
 	var contract_name: String="NO ACTIVE CONTRACT"
 	if not economy.active.is_empty():contract_name="%s / %s" % [economy.active.id,String(economy.active.commodity).to_upper()]
-	hud.text="CARGO LOOP TEST / %s\n%s\nRACKED %d/%d   STAGING %d/4   %s   %d CR\nWASD WALK / SHIFT HURRY / F USE / P PACKING PLAN / ESC MOUSE" % [System.NAMES[economy.station].to_upper(),contract_name,packing.placements.size(),parcels.size(),stage_count(),"LOCKED" if locked else "UNLOCKED",economy.credits]
+	hud.text="CARGO LOOP TEST / %s\n%s\nRACKED %d/%d   STAGED %d CASES   %s   %d CR\nWASD WALK / SHIFT HURRY / F USE / P PACKING PLAN / ESC MOUSE" % [System.NAMES[economy.station].to_upper(),contract_name,packing.placements.size(),parcels.size(),stage_count(),"LOCKED" if locked else "UNLOCKED",economy.credits]
 	if panel.visible:ghost.hide();prompt.text="";return
 	_update_aim()
 
@@ -253,8 +257,9 @@ func _update_aim() -> void:
 			ghost.global_transform=candidate.transform
 			ghost_material.albedo_color=Color(0.35,0.95,0.57,0.30) if candidate.reason.is_empty() else Color(1,0.24,0.14,0.35)
 			ghost.show()
-			prompt.text=("[F] PLACE / "+candidate.label if candidate.reason.is_empty() else candidate.reason)+"\nR TURN / T TIP / Z DEPTH: "+["AUTO","REAR","FRONT"][depth_mode]
-		else:prompt.text="CARRYING #%02d / %d × %d × %d\nAim at a rack, staging pad, or delivery position. R turn / T tip" % [held,held_size.x,held_size.y,held_size.z]
+			var controls:String="R TURN / T TIP / Z DEPTH: "+["AUTO","REAR","FRONT"][depth_mode] if candidate.kind=="rack" else "R TURN / T TIP / AIM AT BOX TOP TO STACK"
+			prompt.text=("[F] PLACE / "+candidate.label if candidate.reason.is_empty() else candidate.reason)+"\n"+controls
+		else:prompt.text="CARRYING #%02d / %d × %d × %d\nAim at a grid cell or the top of a box to stack. R turn / T tip" % [held,held_size.x,held_size.y,held_size.z]
 		return
 	prompt.text="Walk to a box or computer and press F."
 	if current_hit.is_empty():return
@@ -263,14 +268,35 @@ func _update_aim() -> void:
 		var id:int=hit.get_meta("parcel")
 		if not parcels.has(id):return
 		prompt.text="[F] LIFT #%02d / %s" % [id,parcels[id].location.to_upper()]
-		if parcels[id].location=="rack":
-			var reason:String="Cargo locked. Release at the CARGO LOCK button." if locked else packing.can_remove(id)
-			if not reason.is_empty():prompt.text=reason
+		var model = packing if parcels[id].location=="rack" else floor_packing
+		var reason:String="Cargo locked. Release at the CARGO LOCK button." if locked and parcels[id].location=="rack" else model.can_remove(id)
+		if not reason.is_empty():prompt.text=reason
 	elif hit.has_meta("action"):
 		prompt.text={"contract":"[F] CONTRACTS / JOB BOARD","complete":"[F] COMPLETE DELIVERY","depart":"[F] DEPARTURE / TEST TRANSFER","lock":"[F] RELEASE CARGO" if locked else "[F] LOCK CARGO"}.get(hit.get_meta("action"),"[F] USE")
 
 func _placement_target() -> Dictionary:
 	var origin:=camera.global_position;var direction:Vector3=-camera.global_basis.z
+	# Use the actual touched box face so aiming at its top stacks directly above it.
+	if not current_hit.is_empty():
+		var hit_id:int=current_hit.collider.get_meta("parcel",-1)
+		if floor_packing.placements.has(hit_id):
+			var data:Dictionary=parcels[hit_id]
+			if _floor_available(data.location):
+				var base:=_floor_origin(data.location,data.slot)
+				var local:Vector3=(current_hit.position-base)/CELL
+				var cell:=Vector3i(floori(local.x-held_size.x*0.5+0.5),floori(local.y),floori(local.z-held_size.z*0.5+0.5))
+				cell.x=clampi(cell.x,0,maxi(0,FLOOR_GRID.x-held_size.x))
+				cell.z=clampi(cell.z,0,maxi(0,FLOOR_GRID.z-held_size.z))
+				var placed:Dictionary=floor_packing.placements[hit_id]
+				var normal:Vector3=current_hit.normal
+				if normal.y>0.5:cell.y=placed.cell.y+placed.size.y
+				elif absf(normal.x)>0.5:
+					cell.x=placed.cell.x+placed.size.x if normal.x>0 else placed.cell.x-held_size.x
+					cell.y=placed.cell.y
+				else:
+					cell.z=placed.cell.z+placed.size.z if normal.z>0 else placed.cell.z-held_size.z
+					cell.y=placed.cell.y
+				return floor_target(data.location,data.slot,cell,held_size)
 	for index in racks.size():
 		var rack:Node3D=racks[index]
 		var local_origin:Vector3=rack.to_local(origin)
@@ -291,26 +317,41 @@ func _placement_target() -> Dictionary:
 		if locked:reason="Release the cargo locks before placing a case."
 		return {"kind":"rack","bin":index,"cell":cell,"reason":reason,"label":"RACK "+("A" if index==0 else "B"),"transform":rack.global_transform*Transform3D(Basis.IDENTITY,(Vector3(cell)+Vector3(held_size)*0.5)*CELL)}
 	if direction.y>=-0.02:return {}
-	for index in stage_positions.size():
-		var at:Vector3=stage_positions[index]
-		var t:float=(at.y-origin.y)/direction.y
-		if t<0 or t>4.5:continue
-		var point:=origin+direction*t
-		if absf(point.x-at.x)<0.95 and absf(point.z-at.z)<0.95:
-			return {"kind":"stage","index":index,"reason":"Staging pad occupied." if staging[index]>=0 else "","label":"STAGING %d — CLEAR BEFORE FLIGHT"%(index+1),"transform":Transform3D(Basis.IDENTITY,at+Vector3(0,held_size.y*CELL*0.5,0))}
-	var available_kind:="drop" if not economy.active.is_empty() and economy.active.phase=="unloading" else "pickup"
-	var positions:Array=dock.drop_positions if available_kind=="drop" else dock.pickup_positions
-	for index in positions.size():
-		var at:Vector3=positions[index]
-		var t:float=(at.y+0.04-origin.y)/direction.y
-		if t<0 or t>4.5:continue
-		var point:=origin+direction*t
-		if absf(point.x-at.x)<1.12 and absf(point.z-at.z)<1.12:
-			var occupied:=false
-			for data in parcels.values():
-				if data.location==available_kind and data.slot==index:occupied=true
-			return {"kind":available_kind,"index":index,"reason":"Position occupied." if occupied else "","label":available_kind.to_upper()+" %02d"%(index+1),"transform":Transform3D(Basis.IDENTITY,at+Vector3(0,held_size.y*CELL*0.5+0.04,0))}
+	for kind in ["stage","pickup","drop"]:
+		if not _floor_available(kind):continue
+		var positions:Array=_floor_positions(kind)
+		for index in positions.size():
+			var base:=_floor_origin(kind,index)
+			var t:float=(base.y-origin.y)/direction.y
+			if t<0 or t>4.5:continue
+			var at:Vector3=(origin+direction*t-base)/CELL
+			if at.x<0 or at.x>FLOOR_GRID.x or at.z<0 or at.z>FLOOR_GRID.z:continue
+			var cell:=Vector3i(clampi(floori(at.x-held_size.x*0.5+0.5),0,maxi(0,FLOOR_GRID.x-held_size.x)),0,clampi(floori(at.z-held_size.z*0.5+0.5),0,maxi(0,FLOOR_GRID.z-held_size.z)))
+			return floor_target(kind,index,cell,held_size)
 	return {}
+
+func _floor_positions(kind:String) -> Array:
+	match kind:
+		"stage":return stage_positions
+		"pickup":return dock.pickup_positions
+		"drop":return dock.drop_positions
+	return []
+
+func _floor_available(kind:String) -> bool:
+	if economy.active.is_empty():return false
+	return kind=="stage" or (kind=="drop" and economy.active.phase=="unloading") or (kind=="pickup" and economy.active.phase=="loading")
+
+func _floor_bin(kind:String,index:int) -> int:
+	return index + (0 if kind=="stage" else stage_positions.size() + (dock.pickup_positions.size() if kind=="drop" else 0))
+
+func _floor_origin(kind:String,index:int) -> Vector3:
+	return _floor_positions(kind)[index]+Vector3(-FLOOR_GRID.x*CELL*0.5,0 if kind=="stage" else 0.04,-FLOOR_GRID.z*CELL*0.5)
+
+func floor_target(kind:String,index:int,cell:Vector3i,size:Vector3i) -> Dictionary:
+	var bin_index:=_floor_bin(kind,index)
+	var reason:=floor_packing.can_place(held,bin_index,cell,size)
+	if not _floor_available(kind):reason="This cargo area is not available at this contract stop."
+	return {"kind":kind,"index":index,"bin":bin_index,"cell":cell,"reason":reason,"label":"%s %02d / LAYER %d" % [kind.to_upper(),index+1,cell.y+1],"transform":Transform3D(Basis.IDENTITY,_floor_origin(kind,index)+(Vector3(cell)+Vector3(size)*0.5)*CELL)}
 
 func _placement_blocked(target: Dictionary) -> bool:
 	var size:=Vector3(held_size)*CELL-Vector3.ONE*0.03
@@ -349,7 +390,7 @@ func _make_case(data: Dictionary) -> void:
 	var collision:=CollisionShape3D.new();var shape:=BoxShape3D.new();shape.size=Vector3(data.size)*CELL-Vector3.ONE*0.025
 	collision.shape=shape;body.add_child(collision);visual.add_child(body)
 	add_child(visual);cases[id]=visual
-	visual.position=dock.pickup_positions[data.slot]+Vector3(0,data.size.y*CELL*0.5+0.04,0)
+	visual.position=_floor_origin("pickup",data.slot)+(Vector3(data.cell)+Vector3(data.size)*0.5)*CELL
 
 func _replace_case_visual(id:int,size:Vector3i) -> void:
 	var old:Node3D=cases[id];var parent:=old.get_parent();var pose:=old.transform
@@ -381,7 +422,10 @@ func pick_case(id:int) -> bool:
 		var reason:=packing.can_remove(id)
 		if not reason.is_empty():message(reason);return false
 		packing.remove(id)
-	if data.location=="stage":staging[data.slot]=-1
+	elif floor_packing.placements.has(id):
+		var reason:=floor_packing.can_remove(id)
+		if not reason.is_empty():message(reason);return false
+		floor_packing.remove(id)
 	held=id;held_size=data.size
 	var node:Node3D=cases[id]
 	node.reparent(walker,false)
@@ -423,17 +467,18 @@ func place_held(target:Dictionary) -> bool:
 		if locked:return false
 		var reason:=packing.place(held,target.bin,target.cell,held_size)
 		if not reason.is_empty():message(reason);return false
-	elif target.kind=="stage":
-		if staging[target.index]>=0:return false
-		staging[target.index]=held
 	else:
-		for data in parcels.values():
-			if data.location==target.kind and data.slot==target.index:return false
+		if target.kind not in ["stage","pickup","drop"] or not _floor_available(target.kind):return false
+		if target.index<0 or target.index>=_floor_positions(target.kind).size():return false
+		var reason:=floor_packing.place(held,_floor_bin(target.kind,target.index),target.cell,held_size)
+		if not reason.is_empty():message(reason);return false
+		# Resolve world pose from grid cells; the occupancy and visible box cannot drift apart.
+		target.transform=Transform3D(Basis.IDENTITY,_floor_origin(target.kind,target.index)+(Vector3(target.cell)+Vector3(held_size)*0.5)*CELL)
 	var id:=held;var node:Node3D=cases[id]
 	carry_shape.disabled=true
 	node.reparent(self,false);node.global_transform=target.transform
 	_case_body(id).collision_layer=1
-	parcels[id].location=target.kind;parcels[id].slot=target.get("index",-1);parcels[id].size=held_size
+	parcels[id].location=target.kind;parcels[id].slot=target.get("index",-1);parcels[id].size=held_size;parcels[id].cell=target.cell
 	held=-1
 	ghost.hide()
 	_refresh_station()
@@ -441,8 +486,8 @@ func place_held(target:Dictionary) -> bool:
 
 func stage_count() -> int:
 	var count:=0
-	for id in staging:
-		if id>=0:count+=1
+	for data in parcels.values():
+		if data.location=="stage":count+=1
 	return count
 
 func load_readiness() -> String:
@@ -467,11 +512,15 @@ func toggle_lock() -> bool:
 func _spawn_manifest() -> void:
 	var items:Array=packing.generate(int(economy.active.id.hash()),economy.active.full)
 	economy.active.box_count=items.size()
+	floor_packing.manifest=packing.manifest
 	for i in items.size():
 		var data:Dictionary=items[i].duplicate(true);data.location="pickup";data.slot=i
 		# Initial orientation is carryable through the hatch; players still rotate to pack.
 		var dims:Array=[data.size.x,data.size.y,data.size.z];dims.sort()
 		data.size=Vector3i(dims[0],dims[1],dims[2])
+		data.cell=Vector3i((FLOOR_GRID.x-data.size.x)/2,0,(FLOOR_GRID.z-data.size.z)/2)
+		var error:=floor_packing.place(data.id,_floor_bin("pickup",i),data.cell,data.size)
+		assert(error.is_empty(),error)
 		parcels[data.id]=data;_make_case(data)
 	message("%d assigned cases are ready in COLLECTION. Carry them up the ramp; pack RACK A/B. P shows the optional packing plan." % items.size())
 
@@ -522,7 +571,7 @@ func _clear_cases() -> void:
 		if is_instance_valid(node):
 			for body in node.find_children("*", "CollisionObject3D", true, false):body.collision_layer=0
 			node.queue_free()
-	cases.clear();parcels.clear();packing.reset();staging.assign([-1,-1,-1,-1]);held=-1
+	cases.clear();parcels.clear();packing.reset();floor_packing.reset();held=-1
 	if carry_shape:carry_shape.disabled=true
 
 func _refresh_station() -> void:
@@ -556,7 +605,7 @@ func _packing_plan() -> String:
 	for id in packing.get_solution_order():
 		var p:Dictionary=packing.manifest[id];var c:Vector3i=p.solution_cell;var s:Vector3i=p.solution_size
 		text+="#%02d   RACK %s   DEPTH %d / HEIGHT %d / LENGTH %d   SIZE %d × %d × %d%s\n" % [id,"A" if p.solution_bin==0 else "B",c.x+1,c.y+1,c.z+1,s.x,s.y,s.z,"  [LOADED]" if packing.placements.has(id) else ""]
-	text+="\nLoad in this order; unload in reverse. Other valid arrangements also work.\nFour amber staging pads let you rearrange without returning to the dock.\nKeep the walking aisle clear. Close this screen with Esc."
+	text+="\nLoad in this order; unload in reverse. Other valid arrangements also work.\nFloor grids stack up to 3 layers; aim at box tops to stack.\nFour amber staging pads let you rearrange without returning to the dock.\nKeep the walking aisle clear. Close this screen with Esc."
 	return text
 
 func open_terminal(mode:String) -> void:

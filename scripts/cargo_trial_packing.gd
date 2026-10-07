@@ -1,10 +1,15 @@
 extends RefCounted
-## Pure rack rules. Coordinates are cells: X into rack, Y up, Z along rack.
-## Both bins are accessed from their local low-X face.
+## Shared cargo-grid rules. Coordinates are cells: X across, Y up, Z along.
+## Racks open on low X; floor grids can be accessed from all four sides.
 const GRID := Vector3i(2, 3, 4)
 const CELL := 0.45
 const BIN_COUNT := 2
 const MAX_PARCEL_VOLUME := 8
+
+var grid := GRID
+var bin_count := BIN_COUNT
+var open_sides: Array[Vector3i] = [Vector3i.LEFT]
+var area_name := "rack"
 
 var placements: Dictionary = {}
 var manifest: Dictionary = {}
@@ -47,14 +52,14 @@ func can_place(id: int, bin_index: int, cell: Vector3i, size: Vector3i) -> Strin
 		return "Unknown parcel."
 	if placements.has(id):
 		return "Pick this parcel up before moving it."
-	if bin_index < 0 or bin_index >= BIN_COUNT:
-		return "Choose a cargo rack."
+	if bin_index < 0 or bin_index >= bin_count:
+		return "Choose a cargo %s." % area_name
 	if not _same_shape(size, manifest[id].size):
 		return "Parcel dimensions cannot change; rotate the case instead."
 	if size.x <= 0 or size.y <= 0 or size.z <= 0:
 		return "Parcel dimensions must be positive."
-	if cell.x < 0 or cell.y < 0 or cell.z < 0 or cell.x + size.x > GRID.x or cell.y + size.y > GRID.y or cell.z + size.z > GRID.z:
-		return "Outside the rack. Rotate the case or choose another cell."
+	if cell.x < 0 or cell.y < 0 or cell.z < 0 or cell.x + size.x > grid.x or cell.y + size.y > grid.y or cell.z + size.z > grid.z:
+		return "Outside the %s. Rotate the case or choose another cell." % area_name
 	for other in placements.values():
 		if other.bin == bin_index and _overlaps(cell, size, other.cell, other.size):
 			return "Blocked by another parcel."
@@ -75,7 +80,7 @@ func place(id: int, bin_index: int, cell: Vector3i, size: Vector3i) -> String:
 
 func can_remove(id: int) -> String:
 	if not placements.has(id):
-		return "That parcel is not in a rack."
+		return "That parcel is not in this cargo grid."
 	var current: Dictionary = placements[id]
 	var top: int = current.cell.y + current.size.y
 	for other_id in placements:
@@ -196,17 +201,35 @@ func _solution_before(a: Dictionary, b: Dictionary) -> bool:
 	return a.solution_cell.z < b.solution_cell.z
 
 func _access_clear(bin_index: int, cell: Vector3i, size: Vector3i, ignored_id: int = -1) -> bool:
-	if cell.x == 0:
-		return true
-	var corridor_cell := Vector3i(0, cell.y, cell.z)
-	var corridor_size := Vector3i(cell.x, size.y, size.z)
-	for id in placements:
-		if id == ignored_id:
-			continue
-		var other: Dictionary = placements[id]
-		if other.bin == bin_index and _overlaps(corridor_cell, corridor_size, other.cell, other.size):
-			return false
-	return true
+	for side in open_sides:
+		var corridor_cell := cell
+		var corridor_size := size
+		match side:
+			Vector3i.LEFT:
+				corridor_cell.x = 0
+				corridor_size.x = cell.x
+			Vector3i.RIGHT:
+				corridor_cell.x = cell.x + size.x
+				corridor_size.x = grid.x - corridor_cell.x
+			Vector3i.FORWARD:
+				corridor_cell.z = 0
+				corridor_size.z = cell.z
+			Vector3i.BACK:
+				corridor_cell.z = cell.z + size.z
+				corridor_size.z = grid.z - corridor_cell.z
+		if corridor_size.x == 0 or corridor_size.z == 0:
+			return true
+		var clear := true
+		for id in placements:
+			if id == ignored_id:
+				continue
+			var other: Dictionary = placements[id]
+			if other.bin == bin_index and _overlaps(corridor_cell, corridor_size, other.cell, other.size):
+				clear = false
+				break
+		if clear:
+			return true
+	return false
 
 func _occupied(bin_index: int, cell: Vector3i) -> bool:
 	for placement in placements.values():

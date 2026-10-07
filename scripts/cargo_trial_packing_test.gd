@@ -9,6 +9,7 @@ func _initialize() -> void:
 	_test_placement_rules()
 	_test_access_and_removal()
 	_test_rotations_and_state()
+	_test_floor_grids()
 	print("CARGO PACKING: %d passed, %d failed" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -116,3 +117,18 @@ func _test_rotations_and_state() -> void:
 	check(model.placements.is_empty() and model.manifest.size() == 2, "Reset clears rack positions while retaining parcel identity")
 	check(model.place(2, 0, Vector3i.ZERO, Vector3i(1, 1, 4)).is_empty(), "Longest supported hand-carried case fits the full rack length")
 	check(not model.remove(88), "Removing an absent parcel is a harmless failure")
+
+func _test_floor_grids() -> void:
+	var model = _fixture([Vector3i(2,1,2),Vector3i(2,1,2),Vector3i(2,1,2),Vector3i(2,1,2)])
+	model.grid=Vector3i(4,3,4)
+	model.bin_count=28
+	model.area_name="floor grid"
+	model.open_sides.assign([Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK])
+	check(model.place(1,27,Vector3i.ZERO,Vector3i(2,1,2)).is_empty(),"Floor grids have their own dimensions and support all dock and staging indices")
+	check(model.place(2,27,Vector3i(0,1,0),Vector3i(2,1,2)).is_empty(),"Floor boxes stack with exactly the same full-support rule as rack boxes")
+	check(not model.can_remove(1).is_empty(),"Floor stacks protect their supporting bottom cases")
+	check(model.place(3,27,Vector3i(2,0,0),Vector3i(2,1,2)).is_empty(),"Open floor grids allow side access that a walled rack cannot")
+	check(model.can_place(4,27,Vector3i(2,1,1),Vector3i(2,1,2)).contains("Unsupported"),"A partly supported floor stack is rejected")
+	check(model.can_place(4,27,Vector3i(0,3,0),Vector3i(2,1,2)).contains("Outside"),"Floor grid height is limited to three layers")
+	check(model.can_place(4,27,Vector3i.ZERO,Vector3i(2,1,2)).contains("Blocked"),"Floor cases cannot overlap even when a pad accepts multiple boxes")
+	check(model.remove(2) and model.remove(1) and model.remove(3),"Floor cases unload safely top first without leaving occupancy")

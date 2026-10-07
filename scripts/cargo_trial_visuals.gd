@@ -173,7 +173,7 @@ static func dock(parent: Node3D) -> Dictionary:
 			lamp.omni_range = 9.0
 			lamp.shadow_enabled = false
 			root.add_child(lamp)
-	# 12 wide marked spots per apron, with clear gaps for carrying and retrieval.
+	# 12 stackable grids per apron, with clear gaps for carrying and retrieval.
 	var pickup_positions: Array[Vector3] = []
 	var drop_positions: Array[Vector3] = []
 	for row in 4:
@@ -198,9 +198,19 @@ static func _apron_slot(parent: Node3D, pos: Vector3, index: int, tint: Color) -
 	for side in [-1.0, 1.0]:
 		box(parent, pos + Vector3(side * 1.0, 0, 0), Vector3(0.037, 0.006, 2.0), tint)
 		box(parent, pos + Vector3(0, 0, side * 1.0), Vector3(2.0, 0.006, 0.037), tint)
-	var number := label(parent, "%02d" % index, pos + Vector3(-0.78, 0.006, 0.82), 0.00145)
+	floor_grid(parent,pos,tint)
+	var number := label(parent, "%02d / 3 LAYERS" % index, pos + Vector3(0, 0.006, 1.12), 0.0011)
 	number.rotation.x = -PI * 0.5
 	number.modulate = tint
+
+
+static func floor_grid(parent:Node3D,pos:Vector3,tint:Color) -> void:
+	# Same 45 cm cell spacing as the racks, with a 4 x 4 footprint.
+	for i in 5:
+		var offset := (i-2)*0.45
+		var width := 0.023 if i in [0,4] else 0.009
+		box(parent,pos+Vector3(offset,0.004,0),Vector3(width,0.005,1.8),tint)
+		box(parent,pos+Vector3(0,0.004,offset),Vector3(1.8,0.005,width),tint)
 
 
 static func _zone_title(parent: Node3D, words: String, pos: Vector3, tint: Color) -> void:

@@ -23,6 +23,7 @@ func run(trial: Node3D) -> bool:
 	check(not host.depart() and not host.toggle_lock() and not host.complete_delivery(), "An empty new trial cannot depart, secure nonexistent cargo, or pay a delivery")
 	check(not host.accept_job(-1) and not host.accept_job(999), "Invalid contract choices leave the dock untouched")
 	await _test_aim_usability()
+	await _test_floor_stacks()
 	await _test_full_outbound()
 	await _test_collection_return()
 	_release_walk()
@@ -101,7 +102,7 @@ func _test_aim_usability() -> void:
 		staging_ok = valid and staging_ok
 		if valid:
 			host._use()
-			staging_ok = staging_ok and host.staging[index] == id and host.held == -1
+			staging_ok = staging_ok and host.floor_packing.placements.has(id) and host.floor_packing.placements[id].bin == host._floor_bin("stage",index) and host.held == -1
 			host.pick_case(id)
 	check(staging_ok, "All four staging floor targets produce valid ghosts and accept F placement")
 	var pad: Vector3 = host.stage_positions[0]
@@ -122,6 +123,44 @@ func _test_aim_usability() -> void:
 	# Restore this trial before the complete contract tests below.
 	host.place_held(_apron_target("pickup", source_slot))
 	host.depth_mode = 0
+
+func _test_floor_stacks() -> void:
+	for kind in ["stage","pickup","drop"]:
+		await _reset()
+		host.accept_job(_find_job("outbound",true))
+		host._clear_cases()
+		host.packing.manifest.clear()
+		host.floor_packing.manifest=host.packing.manifest
+		host.economy.active.phase="unloading" if kind=="drop" else "loading"
+		for id in range(101,104):
+			var data:Dictionary={"id":id,"size":Vector3i(2,1,2),"location":"pickup","slot":id-93,"cell":Vector3i(1,0,1)}
+			host.packing.manifest[id]=data.duplicate()
+			host.parcels[id]=data
+			host.floor_packing.place(id,host._floor_bin("pickup",data.slot),data.cell,data.size)
+			host._make_case(data)
+		await _frames(3)
+		check(host.pick_case(101) and host.place_held(host.floor_target(kind,0,Vector3i.ZERO,host.held_size)),kind+": first box snaps to the chosen floor cells")
+		check(host.pick_case(102),kind+": a second box can be carried to the same grid")
+		var base:Vector3=host._floor_origin(kind,0)
+		var center:Vector3=host._floor_positions(kind)[0]
+		var top:Vector3=base+Vector3(1.0,1.0,1.0)*Packing.CELL
+		await _aim_from(center+Vector3(-0.6,0.04,1.9),top)
+		host._update_aim()
+		var upper:bool=not host.candidate.is_empty() and host.candidate.kind==kind and host.candidate.index==0 and host.candidate.cell==Vector3i(0,1,0) and host.candidate.reason.is_empty()
+		if not upper:print("STACK AIM DEBUG ",kind," ",host.candidate," hit=",host.current_hit)
+		check(upper and host.ghost.visible,kind+": aiming at the lower box top previews a supported second layer")
+		host._use()
+		check(host.held==-1 and host.floor_packing.placements.has(102) and host.parcels[102].cell==Vector3i(0,1,0),kind+": F stacks another box in the same marked area")
+		# Move into open space to isolate support rules from hand-tool clearance.
+		await _aim_from(Vector3(0,-1.13,18),Vector3(0,0,12))
+		check(not host.pick_case(101) and host.held==-1 and host.floor_packing.can_remove(101).contains("Supporting"),kind+": the bottom box cannot be removed from under a stack")
+		check(host.pick_case(103) and host.place_held(host.floor_target(kind,0,Vector3i(2,0,0),host.held_size)),kind+": additional boxes can share free cells beside the stack")
+		if kind=="stage":check(host.stage_count()==3 and not host.toggle_lock() and not host.depart(),"Multiple boxes on one staging pad all count and block departure")
+		if kind=="drop":check(host.delivered_count()==3,"Three boxes on one delivery grid count as three delivered boxes")
+		check(host.pick_case(102),kind+": removing the upper box releases its grid cells")
+		check(not host.place_held(host.floor_target(kind,0,Vector3i(0,2,0),host.held_size)),kind+": an unsupported upper layer is rejected")
+		check(not host.place_held(host.floor_target(kind,0,Vector3i(3,0,0),host.held_size)),kind+": cases cannot extend outside the floor grid")
+		check(host.place_held(host.floor_target(kind,1,Vector3i.ZERO,host.held_size)) and host.pick_case(101),kind+": upper-first removal leaves the lower case retrievable")
 
 func _aim_from(position: Vector3, target: Vector3) -> void:
 	_release_walk()
@@ -158,7 +197,7 @@ func _test_full_outbound() -> void:
 	var pickup_geometry_ok := true
 	for id in host.parcels:
 		var data: Dictionary = host.parcels[id]
-		var expected: Vector3 = host.dock.pickup_positions[data.slot] + Vector3(0, data.size.y * Packing.CELL * 0.5 + 0.04, 0)
+		var expected: Vector3 = host._floor_origin("pickup",data.slot) + (Vector3(data.cell)+Vector3(data.size)*0.5)*Packing.CELL
 		pickup_geometry_ok = pickup_geometry_ok and host.cases[id].get_parent() == host and host.cases[id].global_position.is_equal_approx(expected)
 		pickup_geometry_ok = pickup_geometry_ok and host._case_body(id).collision_layer == 1
 	check(pickup_geometry_ok, "Spawned pickup cases have correct world positions and solid collision bodies")
@@ -172,12 +211,12 @@ func _test_full_outbound() -> void:
 		stage_ok = stage_ok and host.cases[id].get_parent() == host.walker and host.carry_shape.disabled == false
 		stage_ok = stage_ok and host._case_body(id).collision_layer == 0 and host.parcels[id].location == "hand"
 		stage_ok = host.place_held(_stage_target(index)) and stage_ok
-		stage_ok = stage_ok and host.staging[index] == id and host.held == -1 and host.cases[id].get_parent() == host
+		stage_ok = stage_ok and host.floor_packing.placements.has(id) and host.floor_packing.placements[id].bin == host._floor_bin("stage",index) and host.held == -1 and host.cases[id].get_parent() == host
 		stage_ok = stage_ok and host.load_readiness().contains("staging") and not host.depart() and not host.toggle_lock()
 	check(stage_ok and host.stage_count() == 4, "All four staging pads accept cases, restore collision, and individually block departure")
 	var spare: int = ids[4]
 	check(host.pick_case(spare), "Another case can be held while all staging positions are occupied")
-	check(not host.place_held(_stage_target(0)) and host.held == spare and host.stage_count() == 4, "An occupied staging position rejects a second parcel without losing either case")
+	check(not host.place_held(_stage_target(0)) and host.held == spare and host.stage_count() == 4, "An overlapping staging placement rejects a second parcel without losing either case")
 	var spare_slot := _free_slot("pickup")
 	check(host.place_held(_apron_target("pickup", spare_slot)), "A held case can be returned to a free collection position")
 	var arranged := _load_solution()
@@ -246,6 +285,7 @@ func _unload_and_complete(starting_credits: int, contract: Dictionary) -> void:
 			if not delivery_aim:
 				print("DELIVERY AIM DEBUG ",host.candidate)
 			check(delivery_aim and host.ghost.visible, "The destination's delivery floor produces a valid unloading ghost")
+			target=host.candidate.duplicate()
 			host._use()
 			unload_ok = host.held == -1 and unload_ok
 		else:
@@ -257,7 +297,20 @@ func _unload_and_complete(starting_credits: int, contract: Dictionary) -> void:
 			refused_partial = not host.complete_delivery() and host.economy.credits == wallet
 	check(unload_ok and host.packing.placements.is_empty() and host.delivered_count() == count, "Every case can be manually unloaded into independent destination positions")
 	check(refused_partial, "Completion refuses a partially unloaded consignment without changing payment")
-	check(host.complete_delivery(), "Delivery button accepts the complete unloaded consignment")
+	# Repack the entire delivered load into ONE floor grid, using two adjacent
+	# rack solutions. This proves capacity and payment count parcels, not spots.
+	var stack_order:Array[int]=host.packing.get_solution_order()
+	var destination_grid:=count-1
+	var stack_ok:=true
+	for id in stack_order:
+		stack_ok=host.pick_case(id) and stack_ok
+		if host.held!=id:continue
+		var solved:Dictionary=host.packing.manifest[id]
+		_orient_held(solved.solution_size)
+		var cell:Vector3i=solved.solution_cell+Vector3i(solved.solution_bin*2,0,0)
+		stack_ok=host.place_held(host.floor_target("drop",destination_grid,cell,host.held_size)) and stack_ok
+	check(stack_ok and host.delivered_count()==count and host.floor_packing.placements.size()==count,"The entire consignment fits stacked in one delivery grid and every box counts toward payment")
+	check(host.complete_delivery(), "Delivery button accepts the complete stacked consignment")
 	check(host.economy.credits == starting_credits + contract.payout - contract.fuel_cost, "Final credits equal the agreed payout minus the fuel already covered by the advance")
 	var wallet: int = host.economy.credits
 	check(not host.complete_delivery() and host.economy.credits == wallet, "Repeated completion cannot pay the same contract twice")
@@ -265,7 +318,7 @@ func _unload_and_complete(starting_credits: int, contract: Dictionary) -> void:
 	var removed_all := true
 	for weak in old_nodes:
 		removed_all = removed_all and weak.get_ref() == null
-	check(host.parcels.is_empty() and host.cases.is_empty() and host.packing.placements.is_empty() and host.stage_count() == 0 and host.held == -1 and host.carry_shape.disabled and removed_all, "Receipt removes the delivered physical cargo and leaves no hidden cases, carried collider, or staging occupancy")
+	check(host.parcels.is_empty() and host.cases.is_empty() and host.packing.placements.is_empty() and host.floor_packing.placements.is_empty() and host.stage_count() == 0 and host.held == -1 and host.carry_shape.disabled and removed_all, "Receipt removes the delivered physical cargo and leaves no hidden cases, carried collider, or staging occupancy")
 	check(host.economy.receipts.size() == 1 and host.economy.active.paid and host.economy.active.phase == "complete", "The economy records exactly one completed receipt")
 
 func _load_solution() -> bool:
@@ -291,11 +344,13 @@ func _rack_target(bin_index: int, cell: Vector3i, size: Vector3i) -> Dictionary:
 	return {"kind":"rack", "bin":bin_index, "cell":cell, "reason":"", "transform":host.racks[bin_index].global_transform * Transform3D(Basis.IDENTITY, (Vector3(cell) + Vector3(size) * 0.5) * Packing.CELL)}
 
 func _stage_target(index: int) -> Dictionary:
-	return {"kind":"stage", "index":index, "reason":"", "transform":Transform3D(Basis.IDENTITY, host.stage_positions[index] + Vector3(0, host.held_size.y * Packing.CELL * 0.5, 0))}
+	return host.floor_target("stage",index,_centered_cell(),host.held_size)
 
 func _apron_target(kind: String, index: int) -> Dictionary:
-	var positions: Array = host.dock.drop_positions if kind == "drop" else host.dock.pickup_positions
-	return {"kind":kind, "index":index, "reason":"", "transform":Transform3D(Basis.IDENTITY, positions[index] + Vector3(0, host.held_size.y * Packing.CELL * 0.5 + 0.04, 0))}
+	return host.floor_target(kind,index,_centered_cell(),host.held_size)
+
+func _centered_cell() -> Vector3i:
+	return Vector3i((4-host.held_size.x)/2,0,(4-host.held_size.z)/2)
 
 func _free_slot(kind: String) -> int:
 	for index in host.dock.pickup_positions.size():
