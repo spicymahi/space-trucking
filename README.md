@@ -1,3 +1,7 @@
+## Project documentation
+
+Start with the [current handoff](docs/HANDOFF.md) for playable builds, source-file ownership, validation, and pending work. The [approved survival design](docs/SURVIVAL_DESIGN.md) records the next gameplay loop, including world time, provisions, daily care, emergency rest, and revised contract financing; these changes are **planned, not yet implemented**.
+
 ## Cargo loop test
 
 The new focused cargo trial is `scenes/cargo_trial.tscn`. On macOS, double-click **Test Cargo.command**. It starts you at Ceres Yard beside a contract computer, with an empty packing bay in the Blender Longhaul. The normal flight game and its save are unchanged; this trial starts fresh each launch.
