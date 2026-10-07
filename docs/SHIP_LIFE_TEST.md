@@ -10,7 +10,7 @@ A new session begins at Ceres Yard at 06:00, with 600 CR, 900 kg of fuel, and em
 2. Use **PROVISIONS** beside the dock computers. Enter `buy food 12`, `buy water 12`, and `refuel` for a fully stocked first test. Purchase smaller quantities when preferred; food and water are sold separately.
 3. Carry the consignment to the ship, pack the racks, clear the staging areas, and use **CARGO LOCK**. **F** picks up and places; **R** turns, **T** tips, **Z** changes rack depth, and **P** opens the packing guide. Pickup, delivery, and the four staging areas allow supported stacking just like the racks.
 4. Choose normal cockpit departure or the optional prepared-cruise shortcut described below.
-5. Aboard, print the day's checklist at the **HAB** terminal. Prepare food, drink water, wash as needed, and inspect the selected sensors. The bunk lets you pass time or sleep when eligible.
+5. Aboard, print the day's checklist at the **HAB** terminal and collect it from the tray with **F**. **Tab** raises the carried sheet. Prepare food, drink water, wash as needed, and inspect the selected sensors. The bunk lets you pass time or sleep when eligible.
 6. At arrival, obtain a berth with `approach` on NAV or COMMS, then use `auto dock` when within range, or complete the approach manually.
 7. Once docked, use CHECKLIST `ramp lower` and `hatch open`. Unlock the cargo, carry every assigned box to the delivery grids, and use the dock **DELIVERY** completion terminal. The remaining fixed fee is paid once.
 
@@ -42,7 +42,7 @@ The ship stores **12 food days and 12 drinking-water days**. One meal and one wa
 | Drinking water | 4 CR per day | `buy water <days>` |
 | Fuel | 0.08 CR per kg | `refuel` fills the tank to 3,000 kg |
 
-Food: **F at fridge → F at oven → wait four real seconds → F to take the cooked plate → F at table → five F bites → F to pick up the dirty plate → G to stand → F at sink.** Setting the meal down seats the player. The table stays occupied until its plate is removed. Food leaves storage when its meal pack is collected, not again when cooked or eaten. Each bite supplies one fifth of the daily meal.
+Food: **F at fridge → F at oven → wait four real seconds → F to take the cooked plate → F at table → five F bites → F to pick up the dirty plate → G to stand → F at sink.** Setting the meal down seats the player at the center of the physical bench cushion; the seated view faces the plate. The table stays occupied until its plate is removed. Food leaves storage when its meal pack is collected, not again when cooked or eaten. Each bite supplies one fifth of the daily meal.
 
 Water: **F at cabinet → F at cooler → look away from other fixtures and F to drink → F at sink.** Filling the glass removes one drinking-water unit. Drinking an already consumed glass or refilling a full glass cannot duplicate water. The sink cleans and puts away used dishes.
 
@@ -50,11 +50,17 @@ Use the bathroom shower control with **F**, then stand under the water. Hygiene 
 
 ## Hab checklist and engineering
 
-At **HAB**, `stock` shows food, water, hygiene, and remaining emergency rests. `checklist` shows today's routine; `print` produces its paper copy. **J** opens the printed checklist elsewhere aboard. Completion reflects current state, including work performed before printing. `discard` recycles the paper.
+At **HAB**, `stock` shows food, water, hygiene, and remaining emergency rests. `checklist` shows overall completion; `print` feeds a physical work order into the tray. Close the terminal and use **F** on the finished sheet to collect it. It is visible in your hand while walking. **Tab** raises/lowers it for reading, **J** stows/retrieves it, and **Delete** recycles it. A sheet must be physically collected: J cannot retrieve it remotely from the printer. The tray becomes empty after collection. Carrying cargo or a dish temporarily hides the sheet.
+
+The printed work order contains the day's assigned sensor names. Neither the engineering CLI, its wall screen, nor a terminal `checklist` shortcut labels sensors as due. Hab displays overall routine completion and stocks; print to obtain the assignments. The sheet reflects completed tasks during its own day. At midnight it remains yesterday's sheet; recycle it and print a new work order. A single sheet is tracked at a time. `discard` also recycles it at a terminal. **Tab at Engineering temporarily reveals the paper and then restores the same terminal view**; cockpit terminals retain their established flight-paper controls.
 
 Each calendar day has one checklist: food, drinking water, adequate hygiene, and two deterministic randomly selected sensor inspections. Waking, printing again, or loading a save does not generate another day's tasks.
 
-At the engineering **SENSORS** terminal, use `status`, then `check <sensor>` for each selected sensor. Names are `navigation`, `proximity`, `coolant`, `pressure`, `drive`, and `communications`. A check performs a self-test/calibration; it does not repair condition.
+At the engineering **SENSORS** terminal, `status` reports all sensor conditions. Read the assignment on your paper, then enter `check <sensor>`. Names are `navigation`, `proximity`, `coolant`, `pressure`, `drive`, and `communications`. Any sensor can be checked, so command availability does not reveal the daily selection.
+
+Each check opens a three-channel calibration puzzle. Match each **READING** to its **REFERENCE**, using `trim a <signed amount>`, `trim b <signed amount>`, and `trim c <signed amount>`. For example, a reading of 8 and reference of 6 needs `trim a -2`. Enter `test` to submit all three. `resume` returns to an unfinished puzzle; `cancel` leaves it without a result or penalty. There is no timer.
+
+Correct readings produce **PASS** and record the inspection. A failed test produces **DEGRADED**, leaves the daily inspection incomplete, and uses 1.5× daily wear until recalibrated or repaired. Use `check <sensor>` to retry. Passing clears the calibration fault but restores no lost condition; only port repairs do that. In-progress puzzles and degraded results are saved. A day boundary cancels an unfinished puzzle without a test result; existing degraded faults persist until corrected.
 
 All sensors begin at 100. Daily base wear is one condition point, applied once at the calendar boundary. A selected, checked sensor loses 0.5 points; a selected, neglected sensor loses 1.5; unselected sensors lose one. A zero-condition sensor blocks departure. A journey already in progress retains emergency capability to reach port.
 
@@ -95,7 +101,7 @@ The combined session has independent files in Godot's `Space Trucking` user-data
 - `ship_life_v1.json`: regular combined save.
 - `ship_life_departure_v1.json`: initial/departure recovery checkpoint.
 
-They preserve the shared clock, stores, dishes and cooking, daily checks, sensor condition, emergency allowance and resupply flags, wallet/advance/debt, station economy and cargo reservations, physical cargo positions, flight, and cockpit display assignments. They neither load nor overwrite `longhaul_flight_v1.json`, the original normal-flight save.
+They preserve the shared clock, stores, dishes and cooking, daily checks, sensor condition, emergency allowance and resupply flags, wallet/advance/debt, station economy and cargo reservations, physical cargo positions, flight, cockpit display assignments, carried checklist text/location, and unfinished sensor calibration puzzles. They neither load nor overwrite `longhaul_flight_v1.json`, the original normal-flight save.
 
 The launcher resumes an existing combined save. To start a fresh combined test explicitly, launch with the user argument `--ship-life-new`; subsequent saves belong to that fresh combined session. Normal-flight progress remains separate.
 
@@ -108,6 +114,7 @@ The launcher resumes an existing combined save. To start a fresh combined test e
 | `scripts/ship_life_flight.gd` | Hosts the established cockpit/flight system with sensor interlocks and paid services |
 | `scripts/ship_life_state.gd` | Calendar, daily requirements, kitchen item state, hygiene, checks, wear, emergency rest |
 | `scripts/ship_life_economy.gd` | Fixed fees, optional advances/debt, real-planner estimates, deterministic hourly market updates, economic saves |
+| `scripts/ship_life_paper.gd` | Camera-carried paper mesh, printed texture, and Tab inspection animation |
 | `scripts/ship_life_visuals.gd` | Physical provisions/repair/hab/sensor fixtures, food/glass props, printer and shower visuals |
 | `scripts/cargo_trial.gd` | Shared physical cargo handling, rack/floor grids, staging and delivery |
 | `scripts/cargo_trial_packing.gd` | Generated guaranteed-fit manifests and support/access validation |
@@ -117,11 +124,11 @@ The legacy engineering puzzle and legacy automatic supplies service are not the 
 
 ## Verification
 
-Latest completed checks: **95 state, 372 economy, 120 combined integration, and 19 complete-flight checks passed**. Existing cargo regressions also passed: 47 packing assertions (including 600 generated manifests), 446 economy assertions, and 108 controller assertions.
+Latest completed checks: **111 state, 136 combined integration, and 19 complete-flight checks passed** for the seat/paper/calibration revision. The unchanged economy last passed 372 checks. Existing cargo regressions also passed: 47 packing assertions (including 600 generated manifests), 446 economy assertions, and 108 controller assertions.
 
 The integration suite exercises the real scene/fixture rays, provisions and cooking, drinking/shower/checks, rest and arrival interruption, cockpit CLI departure and cargo/sensor interlocks, printing, finance, and save restoration. The following flight suite runs actual injection, coast, braking, approach, nose-first autodocking, arrival bookkeeping, animated hatch/ramp opening, unloading, and one-time payment. Some fixture setup and cargo placement use controller methods directly; these are not exclusively input-driven tests. Both suites hash existing normal/combined/checkpoint saves before and after; test writes are redirected into `/tmp`.
 
-Rendered checks also confirmed the hab fixtures, stock terminal, and centered black-screen sleep progress display. Physical interaction checks covered all new fixture rays, the meal/glass workflow, dining-seat exit, and entry into the shower. User playtesting is the next step for pacing and comfort.
+Rendered checks confirmed the centered bench seat, carried and enlarged checklist, calibration prompt, and degraded result. Earlier checks also confirmed the hab fixtures, stock terminal, and centered black-screen sleep progress display. Physical interaction checks covered all new fixture rays, the meal/glass workflow, dining-seat exit, and entry into the shower. User playtesting is the next step for pacing and comfort.
 
 Run from the repository root:
 

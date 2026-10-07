@@ -25,6 +25,8 @@ var daily_water := false
 var sensors: Dictionary = {}
 var selected_sensors: Array[String] = []
 var checked_sensors: Array[String] = []
+var degraded_sensors: Array[String] = []
+var calibration: Dictionary = {}
 var emergency_uses := 0
 var game_over := false
 var printed_day := 0
@@ -59,6 +61,7 @@ func advance(hours: float) -> void:
 		daily_food = 0.0
 		daily_water = false
 		checked_sensors.clear()
+		calibration.clear()
 		_select_sensors()
 	hygiene = maxf(0.0, hygiene - (target - elapsed_hours) * HYGIENE_LOSS_PER_DAY / 24.0)
 	elapsed_hours = target
@@ -78,6 +81,7 @@ func _apply_daily_wear() -> void:
 		var multiplier := 1.0
 		if sensor in selected_sensors:
 			multiplier = 0.5 if sensor in checked_sensors else 1.5
+		if sensor in degraded_sensors: multiplier = 1.5
 		sensors[sensor] = maxf(0.0, float(sensors[sensor]) - SENSOR_WEAR_PER_DAY * multiplier)
 
 func tick_interactions(seconds: float, showering: bool = false) -> void:
@@ -194,11 +198,61 @@ func interact(action: String) -> String:
 func check_sensor(sensor: String) -> String:
 	sensor = sensor.to_lower().strip_edges()
 	if not sensors.has(sensor): return "Unknown sensor. Use status to list sensors."
+	if game_over: return "This run has ended."
 	if float(sensors[sensor]) <= 0.0: return "Sensor failed. A port technician must repair it."
 	if sensor in checked_sensors: return "%s already checked today." % sensor.capitalize()
-	if sensor not in selected_sensors: return "%s is not due for inspection today." % sensor.capitalize()
-	checked_sensors.append(sensor)
-	return "%s self-test and calibration passed. Daily wear reduced." % sensor.capitalize()
+	# Any sensor can be calibrated. Availability must never reveal today's assignment.
+	if not calibration.is_empty():
+		if calibration.sensor == sensor: return calibration_text()
+		return "Finish or cancel the active calibration first.\n\n" + calibration_text()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = day() * 7919 + SENSOR_NAMES.find(sensor) * 131 + 83
+	var target: Array[int] = []
+	var readings: Array[int] = []
+	for channel in 3:
+		var reference := rng.randi_range(3, 6)
+		var offset := rng.randi_range(1, 3) * (-1 if rng.randi_range(0, 1) == 0 else 1)
+		target.append(reference)
+		readings.append(reference + offset)
+	calibration = {"sensor":sensor, "day":day(), "target":target, "readings":readings}
+	return calibration_text()
+
+func calibration_text() -> String:
+	if calibration.is_empty(): return "No active calibration. Use check <sensor>."
+	var lines: Array[String] = ["CALIBRATION / " + str(calibration.sensor).to_upper(), "", "Adjust each reading to match its reference.", "CHANNEL    READING    REFERENCE", ""]
+	for i in 3:
+		lines.append("   %s          %d           %d" % [["A", "B", "C"][i], calibration.readings[i], calibration.target[i]])
+	lines.append("\ntrim <a|b|c> <signed amount>  (example: trim a -2)\ntest : submit all three readings\ncancel : leave without submitting\n\nNo timer. Failed tests mark DEGRADED; recalibration is allowed.")
+	return "\n".join(lines)
+
+func trim_sensor(channel: String, amount: int) -> String:
+	if calibration.is_empty(): return "Start a calibration with check <sensor>."
+	var index := ["a", "b", "c"].find(channel.to_lower())
+	if index < 0 or absi(amount) > 9: return "Use trim <a|b|c> <amount from -9 to 9>."
+	var value := int(calibration.readings[index]) + amount
+	if value < 0 or value > 9: return "Reading must stay between 0 and 9.\n\n" + calibration_text()
+	calibration.readings[index] = value
+	return calibration_text()
+
+func submit_sensor() -> String:
+	if calibration.is_empty(): return "Start a calibration with check <sensor>."
+	var sensor: String = calibration.sensor
+	if game_over or float(sensors[sensor]) <= 0.0:
+		calibration.clear()
+		return "Sensor unavailable. Arrange port service."
+	var passed: bool = calibration.readings == calibration.target
+	calibration.clear()
+	if passed:
+		if sensor not in checked_sensors: checked_sensors.append(sensor)
+		degraded_sensors.erase(sensor)
+		return "PASS / %s calibration verified. Inspection recorded.\nLost condition still needs a port technician." % sensor.to_upper()
+	checked_sensors.erase(sensor)
+	if sensor not in degraded_sensors: degraded_sensors.append(sensor)
+	return "DEGRADED / %s calibration failed. Inspection incomplete.\nDaily wear is 1.5x until recalibrated or repaired.\nUse check %s to try again; no condition is restored by calibration." % [sensor.to_upper(), sensor]
+
+func cancel_calibration() -> String:
+	calibration.clear()
+	return "Calibration cancelled. No test submitted or condition changed."
 
 func can_depart() -> bool:
 	for condition in sensors.values():
@@ -216,7 +270,10 @@ func repair_quote(sensor: String = "all") -> int:
 func repair(sensor: String = "all") -> String:
 	if repair_quote(sensor) < 0: return "Unknown sensor."
 	for name in SENSOR_NAMES:
-		if sensor == "all" or name == sensor: sensors[name] = 100.0
+		if sensor == "all" or name == sensor:
+			sensors[name] = 100.0
+			degraded_sensors.erase(name)
+	if not calibration.is_empty() and (sensor == "all" or calibration.sensor == sensor): calibration.clear()
 	return "Port service restored %s sensor condition." % ("all" if sensor == "all" else sensor)
 
 func survival_ready() -> bool:
@@ -282,9 +339,11 @@ func sensor_text() -> String:
 	for sensor in SENSOR_NAMES:
 		var condition := float(sensors[sensor])
 		var note := "FAILED / PORT REPAIR" if condition <= 0.0 else ("PORT SERVICE ADVISED" if condition <= 25.0 else "nominal")
-		if sensor in selected_sensors: note += " / " + ("CHECKED" if sensor in checked_sensors else "CHECK DUE")
+		if sensor in degraded_sensors: note = "DEGRADED / RECALIBRATE"
+		if condition <= 0.0: note = "FAILED / PORT REPAIR"
+		elif sensor in checked_sensors: note += " / TEST PASSED"
 		lines.append("%-15s %5.1f%%  %s" % [sensor.to_upper(), condition, note])
-	lines.append("\nCOMMAND: check <sensor>\nOnly port technicians restore condition.")
+	lines.append("\ncheck <sensor> / resume / trim <a|b|c> <amount> / test / cancel\nDaily assignments are on the printed hab checklist.\nOnly port technicians restore condition.")
 	return "\n".join(lines)
 
 func snapshot() -> Dictionary:
@@ -292,6 +351,7 @@ func snapshot() -> Dictionary:
 		"hygiene":hygiene, "hand_item":hand_item, "hand_bites":hand_bites, "oven_state":oven_state,
 		"cook_remaining":cook_remaining, "table_bites":table_bites, "daily_food":daily_food, "daily_water":daily_water,
 		"sensors":sensors.duplicate(true), "selected_sensors":selected_sensors.duplicate(), "checked_sensors":checked_sensors.duplicate(),
+		"degraded_sensors":degraded_sensors.duplicate(), "calibration":calibration.duplicate(true),
 		"emergency_uses":emergency_uses, "game_over":game_over, "printed_day":printed_day,
 		"bought_food":_bought_food, "bought_water":_bought_water}
 
@@ -321,7 +381,28 @@ func restore(data: Dictionary) -> void:
 	var saved_checked = data.get("checked_sensors", [])
 	if saved_checked is Array:
 		for sensor in saved_checked:
-			if str(sensor) in selected_sensors and str(sensor) not in checked_sensors: checked_sensors.append(str(sensor))
+			if str(sensor) in SENSOR_NAMES and str(sensor) not in checked_sensors: checked_sensors.append(str(sensor))
+	degraded_sensors.clear()
+	var saved_degraded = data.get("degraded_sensors", [])
+	if saved_degraded is Array:
+		for sensor in saved_degraded:
+			if str(sensor) in SENSOR_NAMES and str(sensor) not in degraded_sensors:
+				degraded_sensors.append(str(sensor))
+				checked_sensors.erase(str(sensor))
+	calibration.clear()
+	var saved_calibration = data.get("calibration", {})
+	if saved_calibration is Dictionary and str(saved_calibration.get("sensor", "")) in SENSOR_NAMES and int(saved_calibration.get("day", 0)) == day():
+		var valid := true
+		for key in ["target", "readings"]:
+			var values = saved_calibration.get(key, [])
+			if not values is Array or values.size() != 3: valid = false
+			else:
+				for value in values:
+					if (value is not int and value is not float) or not is_finite(float(value)) or float(value) != floorf(float(value)) or float(value) < 0 or float(value) > 9: valid = false
+		if valid:
+			calibration = {"sensor":str(saved_calibration.sensor), "day":day(), "target":[], "readings":[]}
+			for key in ["target", "readings"]:
+				for value in saved_calibration[key]: calibration[key].append(int(value))
 	emergency_uses = clampi(int(data.get("emergency_uses", 0)), 0, 3)
 	game_over = bool(data.get("game_over", false))
 	printed_day = clampi(int(data.get("printed_day", 0)), 0, day())

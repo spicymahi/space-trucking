@@ -23,7 +23,7 @@ Interrupt skipping for arrival, a ship condition needing attention, or inadequat
 
 A hangar terminal sells food and drinking water, separately, in days. One food unit and one water unit satisfy one game day. No minimum purchase requirement; quantities cannot exceed ship storage. Initial capacity: 12 food units and 12 water units.
 
-A HAB TERMINAL must show the same live food and water stock as the station terminal. Include days remaining and capacity. The hab terminal also provides the daily checklist and printing. Never maintain separate conflicting inventory copies for the two terminals.
+A HAB TERMINAL must show the same live food and water stock as the station terminal. Include days remaining and capacity. The hab terminal reports overall daily completion and prints the work order; the paper gives the assigned sensor names. Never maintain separate conflicting inventory copies for the two terminals.
 
 Showering uses a recycled utility-water system rather than consuming the drinking-water units in this initial version.
 
@@ -52,11 +52,11 @@ Enter the bathroom shower, turn it on, and remain under it while hygiene rises. 
 
 ## Daily checklist and sensor care
 
-Print the daily checklist at the cabin/hab terminal. Terminal and paper reflect completion. Include eating, drinking, sufficient hygiene, and a small random selection of sensors for that day.
+Print the daily checklist at the cabin/hab terminal and collect the physical sheet from its tray with F. Carry it while walking, use Tab to bring it closer, J to stow/retrieve it, and Delete to recycle it. The paper lists eating, drinking, sufficient hygiene, and the two assigned sensors. The hab terminal reports overall completion; Engineering shows condition and test outcomes without revealing which sensors are due. The current-day sheet reflects completion; an old sheet retains its original day and assignments until recycled and replaced. At the Engineering terminal, Tab temporarily reveals the sheet and restores the previous terminal view afterward.
 
-At the engineering sensor terminal, `status` reports sensor condition. A short self-test/calibration action such as `check navigation` completes the selected sensor check. Implemented sensors: navigation, proximity, coolant, pressure, drive, communications. Two are selected each day. `check <sensor>` completes the self-test.
+At Engineering, `check <sensor>` starts a short, untimed three-channel calibration puzzle. Use `trim <a|b|c> <signed amount>` to match displayed readings to references, then `test`. Correct readings pass and complete the inspection. Incorrect readings leave it incomplete and set DEGRADED, with 1.5× daily wear until corrected or repaired. Retrying is allowed; successful calibration clears the fault without restoring condition. `cancel` has no penalty; `resume` returns to unfinished work. Any sensor can be checked, so the terminal cannot reveal assignments by refusing unrelated checks. Implemented sensors: navigation, proximity, coolant, pressure, drive, communications. Two are assigned per day. Save files retain unfinished puzzles and degraded results; midnight cancels unfinished work and retains existing faults.
 
-All sensors start at 100 condition. Selected sensors wear at 0.5 times normal daily wear when checked and 1.5 times normal wear when neglected. Unselected sensors use normal wear. Apply daily wear once at the day boundary; completing a check late still counts. Choose a base rate that takes many neglected days to fail, and warn before failure.
+All sensors start at 100 condition. Selected sensors wear at 0.5 times normal daily wear when checked and 1.5 times normal wear when neglected. Unselected sensors use normal wear. Apply daily wear once at the day boundary; completing a check late still counts. Base wear is one condition point per day. Degraded calibration faults override the ordinary multiplier with 1.5× wear until corrected or repaired.
 
 Only hangar repair services restore sensor condition. Zero condition blocks the next takeoff, while emergency capability must allow the current journey to finish and dock. Port service offers individual repairs and repair-all with a quote. Essential departure-blocking repairs also need a recovery route so the player cannot be trapped without work.
 

@@ -25,6 +25,7 @@ var port_readout: Label3D
 var repairs_readout: Label3D
 var oven_lamp: MeshInstance3D
 var last_table_bites := -999
+var dining_seat: Marker3D
 
 func build(parent: Node3D, ship: Node3D) -> Dictionary:
 	name = "ShipLifeVisuals"
@@ -110,6 +111,12 @@ func _galley() -> void:
 	_target("water", Vector3(1.28, 1.26, -6.48), Vector3(0.10, 0.48, 0.36))
 
 func _hab() -> void:
+	# Seat reference is the middle of the actual Blender/legacy bench cushion.
+	# The previous pose was at the aisle edge and ahead of the cushion.
+	dining_seat = Marker3D.new()
+	dining_seat.name = "DiningSeatCushion"
+	fittings.add_child(dining_seat)
+	dining_seat.position = Vector3(-1.24, 0.61, -4.49)
 	# Keep the original table and its clear forward place setting. The keyboard
 	# remains on the back half; meal props never float over its keys.
 	Art.box(fittings, Vector3(-1.20, 0.849, -5.00), Vector3(0.42, 0.009, 0.29), Color("536253"))
@@ -201,11 +208,11 @@ func refresh(state: Dictionary) -> void:
 		port_readout.text = "ONBOARD PROVISIONS\nFOOD %s/12  WATER %s/12\n[F] BUY SUPPLIES" % [food, water]
 	if state.has("sensors"):
 		var lines: Array[String] = ["ENGINEERING / DAILY SENSOR CARE", ""]
-		var selected: Array = state.get("selected_sensors", [])
 		var checked: Array = state.get("checked_sensors", [])
+		var degraded: Array = state.get("degraded_sensors", [])
 		for sensor in state.sensors:
 			var condition: float = float(state.sensors[sensor])
-			var flag := "FAIL" if condition <= 0 else ("DONE" if sensor in checked else ("DUE" if sensor in selected else "OK"))
+			var flag := "FAIL" if condition <= 0 else ("DEGRADED" if sensor in degraded else ("PASS" if sensor in checked else "OK"))
 			lines.append("%-14s %3d%% %s" % [String(sensor).to_upper(), roundi(condition), flag])
 		lines.append("\n[F] STATUS / SELF-TEST")
 		sensor_readout.text = "\n".join(lines)

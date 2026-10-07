@@ -82,20 +82,28 @@ func _provision_and_accept() -> void:
 	check(host.life_art.printer_paper.visible, "finished printed checklist is visible in tray")
 	check(host.life_art.hab_readout.text.contains("4") and host.life_art.port_readout.text.contains("4"), "physical port and hab screens reflect purchased stock")
 	press(KEY_J)
-	check(host.panel.visible and host.terminal_mode == "daily", "printed checklist can be opened with J")
-	host._update_life_visuals()
-	check(host.printed and not host.paper_in_tray and not host.life_art.printer_paper.visible, "J collects the paper and clears the physical printer tray")
-	press(KEY_ESCAPE)
+	check(host.paper_in_tray and not host.daily_paper.visible, "J cannot remotely collect a sheet from its tray")
+	await use_fixture("paper",Vector3(-0.65,0.05,-4.80))
+	check(not host.panel.visible and not host.paper_in_tray and host.daily_paper.visible, "F collects a physical carried sheet rather than opening another terminal")
+	check(not host.life_art.printer_paper.visible, "collecting the sheet empties the printer tray")
+	var before: Vector3=host.walker.position
+	press(KEY_TAB)
+	check(host.paper_open and host.daily_paper.closeup and not host.panel.visible, "Tab raises the physical sheet for inspection")
+	check(host.daily_paper.ink.text.contains(host.life.selected_sensors[0]), "real paper texture names today's assigned checks")
+	press(KEY_TAB)
+	check(not host.paper_open and host.daily_paper.visible and host.walker.position==before, "lowering sheet preserves carried paper and player position")
 	press(KEY_J)
-	check(host.panel.visible and host.printed and not host.paper_in_tray, "collected checklist remains readable without creating another tray sheet")
-	host._command("discard")
-	check(not host.printed and not host.paper_in_tray, "discard removes carried daily paper")
+	check(host.paper_stowed and not host.daily_paper.visible, "J stows the collected sheet")
+	press(KEY_J)
+	check(not host.paper_stowed and host.daily_paper.visible, "J retrieves the same sheet without printing duplicates")
+	press(KEY_DELETE)
+	check(not host.printed and not host.paper_in_tray and not host.daily_paper.visible, "Delete recycles the actual carried sheet")
 	host.open_terminal("hab")
 	host._command("print")
 	host.printed_timer = 0.0
 	host._update_life_visuals()
 	await use_fixture("paper",Vector3(-0.65,0.05,-4.80))
-	check(host.panel.visible and host.terminal_mode == "daily" and host.printed and not host.paper_in_tray, "F collects a finished sheet from the physical printer")
+	check(host.printed and not host.paper_in_tray and host.daily_paper.visible, "replacement print can be physically collected")
 	host.panel.hide()
 
 func _kitchen() -> void:
@@ -111,6 +119,12 @@ func _kitchen() -> void:
 	check(host.life.hand_item == "meal" and host.life.hand_bites == 5, "F retrieves cooked five-bite meal")
 	await use_fixture("table",Vector3(-0.45,0.05,-4.50))
 	check(host.life.table_bites == 5 and host.seated_table, "placing plate uses table and seats player")
+	var cushion: Vector3=host.life_art.dining_seat.global_position
+	check(is_equal_approx(host.walker.global_position.x,cushion.x) and is_equal_approx(host.walker.global_position.z,cushion.z), "dining pose is centered over the physical bench cushion")
+	var ray:=PhysicsRayQueryParameters3D.create(cushion+Vector3(0,0.3,0),cushion-Vector3(0,0.2,0),1)
+	var hit:Dictionary=host.get_world_3d().direct_space_state.intersect_ray(ray)
+	check(not hit.is_empty() and float(hit.position.y)>0.50, "solid bench supports seated pose instead of empty aisle")
+	check(is_equal_approx(host.camera.global_position.y,cushion.y+0.72) and is_equal_approx(host.pitch,host.camera.rotation.x), "seated eye height and mouse-look pitch match cushion and meal")
 	press(KEY_F)
 	check(host.life.table_bites == 4 and is_equal_approx(host.life.daily_food,0.2), "seated F eats first bite")
 	for bite in 4: press(KEY_F)
@@ -148,12 +162,29 @@ func _shower_and_checks() -> void:
 	await use_fixture("sensors",Vector3(0,0.05,8.15))
 	check(host.panel.visible and host.terminal_mode == "sensors", "engineering sensor screen is physically accessible")
 	host._command("status")
-	check(host.readout.text.contains("CHECK DUE"), "sensor status identifies random daily inspections")
-	for sensor in host.life.selected_sensors: host._command("check " + sensor)
-	check(host.life.checked_sensors.size() == 2 and host.life.checklist_complete(), "sensor commands complete today's existing daily routine")
-	host.panel.hide()
-	press(KEY_J)
-	check(host.readout.text.contains("[X] Eat daily meal") and not host.readout.text.contains("[ ]"), "printed checklist reflects actions without reprinting")
+	check(not host.readout.text.contains("CHECK DUE") and not host.life_art.sensor_readout.text.contains("DUE"), "neither engineering CLI nor wall CRT reveal due assignments")
+	host._command("checklist")
+	check(not host.readout.text.contains("Check "+host.life.selected_sensors[0]), "engineering checklist shortcut does not expose assigned names")
+	var due: String=host.life.selected_sensors[0]
+	host._command("check "+due)
+	check(not host.life.calibration.is_empty() and host.life.checked_sensors.is_empty(), "check command starts a puzzle instead of automatically passing")
+	host._command("test")
+	check(host.readout.text.contains("DEGRADED") and due in host.life.degraded_sensors and not host.life.checklist_complete(), "failed CLI submission reports degraded and leaves daily check incomplete")
+	for sensor in host.life.selected_sensors:
+		host._command("check " + sensor)
+		for i in 3:
+			var amount:int=int(host.life.calibration.target[i])-int(host.life.calibration.readings[i])
+			host._command("trim %s %d" % [["a","b","c"][i],amount])
+		host._command("test")
+	check(host.life.checked_sensors.size() == 2 and host.life.checklist_complete() and host.life.degraded_sensors.is_empty(), "solving both calibration puzzles completes today's routine")
+	var terminal_text:String=host.readout.text
+	# Exercise _input so Tab is intercepted before the focused LineEdit consumes it.
+	var tab:=InputEventKey.new();tab.keycode=KEY_TAB;tab.physical_keycode=KEY_TAB;tab.pressed=true
+	host._input(tab)
+	check(host.paper_open and not host.panel.visible and host.daily_paper.visible, "Tab reveals physical paper while using engineering terminal")
+	check(host.daily_paper.ink.text.contains("[X] Eat daily meal") and not host.daily_paper.ink.text.contains("[ ]"), "carried checklist reflects completion without reprinting")
+	host._input(tab)
+	check(host.panel.visible and not host.paper_open and host.readout.text==terminal_text, "lowering paper restores same engineering screen")
 	host.panel.hide()
 
 func _rest_clock() -> void:
@@ -177,7 +208,7 @@ func _rest_clock() -> void:
 	host._process_skip(10.0)
 	check(host.skip.is_empty() and host.life.day() == 2 and is_equal_approx(host.life.hour(),6.0), "sleep crosses midnight and wakes at06")
 	check(host.life.daily_food == 0 and not host.life.daily_water and host.life.checked_sensors.is_empty(), "calendar boundary creates one new checklist")
-	check(not host.printed and not host.paper_in_tray, "new calendar day retires the previous daily printout")
+	check(host.printed and host.life.printed_day==1 and host.paper_text.contains("DAY 01"), "new day retains old physical sheet without silently replacing its assignments")
 	check(is_equal_approx(host.life.sensors[selected],sensor_before-0.5), "completed sensor inspection applies half daily wear")
 	check(host.start_rest("pass").contains("checklist") and host.skip.is_empty(), "new day cannot be skipped until chores complete")
 
@@ -186,7 +217,9 @@ func _persistence() -> void:
 	host.life.interact("cabinet")
 	host.life.interact("cooler")
 	host._update_life_visuals()
+	host.life.check_sensor(host.life.selected_sensors[0])
 	var state: Dictionary = host.life.snapshot()
+	var saved_paper:String=host.paper_text
 	var credits: int = host.economy.credits
 	var count: int = host.parcels.size()
 	var clock: float = host.ship.flight.elapsed
@@ -201,6 +234,9 @@ func _persistence() -> void:
 	check(host.economy.credits == credits and host.parcels.size() == count, "load restores contract wallet and physical cargo")
 	check(is_equal_approx(host.ship.flight.elapsed,clock), "load restores flight clock with survival clock")
 	check(host.life_hand != null and host.life.hand_item == "water_glass", "held survival item survives load with its visual")
+	check(host.printed and not host.paper_in_tray and host.paper_text==saved_paper, "save restores carried paper contents and empty tray")
+	check(not host.life.calibration.is_empty(), "combined save preserves unfinished sensor puzzle")
+	host.life.cancel_calibration()
 	host._use_life("drink")
 	host._use_life("sink")
 	check(host.life.hand_item == "", "restored glass remains usable and cleanable")

@@ -19,9 +19,55 @@ func ready_day(state) -> void:
 	state.daily_food = 1.0
 	state.daily_water = true
 	state.hygiene = 80.0
-	for sensor in state.selected_sensors: state.check_sensor(sensor)
+	for sensor in state.selected_sensors: solve_sensor(state, sensor)
+
+func solve_sensor(state, sensor: String) -> void:
+	state.check_sensor(sensor)
+	if state.calibration.is_empty(): return
+	for i in 3:
+		state.trim_sensor(["a", "b", "c"][i], int(state.calibration.target[i])-int(state.calibration.readings[i]))
+	state.submit_sensor()
+
+func calibration_checks() -> void:
+	var state = Life.new()
+	var due: String = state.selected_sensors[0]
+	check(not state.sensor_text().contains("CHECK DUE"), "engineering status never reveals daily assignments")
+	var unrelated: String = ""
+	for sensor in Life.SENSOR_NAMES:
+		if sensor not in state.selected_sensors: unrelated=sensor;break
+	check(state.check_sensor(unrelated).contains("CALIBRATION /"), "unassigned sensors offer same puzzle without leaking schedule")
+	check(state.checked_sensors.is_empty(), "starting a check grants no inspection credit")
+	var before: Dictionary=state.snapshot()
+	check(state.check_sensor(due).contains("Finish or cancel"), "changing sensor cannot silently discard active puzzle")
+	state.trim_sensor("bad", 2);state.trim_sensor("a", 100)
+	check(state.snapshot()==before, "invalid trim leaves puzzle and condition unchanged")
+	state.cancel_calibration()
+	check(state.degraded_sensors.is_empty(), "cancelling an unsubmitted test has no penalty")
+	state.check_sensor(due)
+	check(state.submit_sensor().begins_with("DEGRADED") and due in state.degraded_sensors and due not in state.checked_sensors, "wrong calibration fails and records degraded without completing daily check")
+	var condition: float=state.sensors[due]
+	check(condition==100, "failed calibration does not invent instant structural damage")
+	state.check_sensor(due)
+	var first: Dictionary=state.calibration.duplicate(true)
+	state.trim_sensor("a",int(first.target[0])-int(first.readings[0]))
+	var saved: Dictionary=state.snapshot()
+	var loaded=Life.new();loaded.restore(JSON.parse_string(JSON.stringify(saved)))
+	check(loaded.snapshot()==state.snapshot(), "in-progress trim and degraded result survive JSON save")
+	solve_sensor(loaded,due)
+	check(due in loaded.checked_sensors and due not in loaded.degraded_sensors, "correct readings pass and clear calibration fault")
+	check(loaded.sensors[due]==condition, "passing calibration cannot repair lost condition")
+	loaded.sensors[due]=77.0
+	check(loaded.check_sensor(due).contains("already checked") and loaded.sensors[due]==77.0, "repeat checks cannot farm condition or wear credit")
+	state.advance(18.0)
+	check(state.calibration.is_empty() and is_equal_approx(state.sensors[due],98.5), "midnight cancels old puzzle and applies degraded wear once")
+	check(due in state.degraded_sensors, "degraded calibration survives day rollover until corrected")
+	state.repair(due)
+	check(due not in state.degraded_sensors and state.sensors[due]==100, "paid port service clears degraded status")
+	state.restore({"calibration":{"sensor":due,"day":1,"target":[1,2,3],"readings":[0,999,2]}})
+	check(state.calibration.is_empty(), "corrupt out-of-range puzzle save is rejected safely")
 
 func run() -> void:
+	calibration_checks()
 	var life = Life.new()
 	check(life.day() == 1 and close(life.hour(), 6.0), "initial calendar is day1 at06")
 	check(life.time_text() == "DAY 01 / 06:00 AST", "calendar formats stable shared clock")
@@ -104,7 +150,7 @@ func run() -> void:
 	life.print_checklist()
 	life.print_checklist()
 	check(life.printed_day == 1 and life.daily_food == 1.0, "printing never creates or resets daily tasks")
-	for sensor in life.selected_sensors: life.check_sensor(sensor)
+	for sensor in life.selected_sensors: solve_sensor(life, sensor)
 	check(life.checklist_complete(), "existing completed actions count before print")
 	var selected: Array = life.selected_sensors.duplicate()
 	life.check_sensor(selected[0])

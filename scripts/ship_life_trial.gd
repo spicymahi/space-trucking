@@ -21,6 +21,11 @@ var paper_in_tray:=false
 var terminal_history:Array[String]=[]
 var terminal_live:=false
 var paper_open:=false
+var daily_paper:Node3D
+var paper_text:=""
+var paper_stowed:=false
+var paper_terminal_hidden:=false
+var aim_dot:Control
 var paused_life:=false
 var seated_pilot:=false
 var seated_table:=false
@@ -44,6 +49,9 @@ func _ready() -> void:
 	DisplayServer.window_set_title("Space Trucking — Complete Ship Life Test")
 	ship.configure(self)
 	life_art=LifeArt.new();fixtures=life_art.build(self,ship)
+	daily_paper=preload("res://scripts/ship_life_paper.gd").new();daily_paper.build(camera)
+	for child in hud.get_parent().get_children():
+		if child is Label and child.text=="+":aim_dot=child
 	_build_skip_ui()
 	life_ready=true
 	life.begin_station_visit()
@@ -73,9 +81,11 @@ func _build_skip_ui() -> void:
 
 func _process(delta:float) -> void:
 	if not life_ready:return
-	toast_timer=maxf(0,toast_timer-delta);toast.visible=toast_timer>0 and not panel.visible and ship.active_terminal==null
+	toast_timer=maxf(0,toast_timer-delta);toast.visible=toast_timer>0 and not paper_open and not panel.visible and ship.active_terminal==null
+	hud.visible=not paper_open
+	if aim_dot:aim_dot.visible=not paper_open and not panel.visible
 	var title:String="NO CONTRACT" if economy.active.is_empty() else economy.active.id+" / "+economy.active.phase.to_upper()
-	hud.text="%s / %s\n%s   %d CR   FOOD %dd   WATER %dd   HYGIENE %d%%\nRACKED %d/%d / STAGED %d   F1 GUIDE / J DAILY PAPER / F5 SAVE / F9 LOAD" % [life.time_text(),ship.flight.phase.to_upper(),title,economy.credits,life.food_stock,life.water_stock,life.hygiene,packing.placements.size(),parcels.size(),stage_count()]
+	hud.text="%s / %s\n%s   %d CR   FOOD %dd   WATER %dd   HYGIENE %d%%\nRACKED %d/%d / STAGED %d   F1 GUIDE / TAB READ PAPER / J STOW / F5 SAVE / F9 LOAD" % [life.time_text(),ship.flight.phase.to_upper(),title,economy.credits,life.food_stock,life.water_stock,life.hygiene,packing.placements.size(),parcels.size(),stage_count()]
 	if paused_life:prompt.text="PAUSED / ESC RESUME";return
 	if life.game_over:
 		skip_screen.show();skip_bar.hide();skip_label.text="RESCUE / RUN ENDED\nEmergency rest exhausted.\nF9 reloads the departure checkpoint."
@@ -86,6 +96,7 @@ func _process(delta:float) -> void:
 	if panel.visible and terminal_live:readout.text=_terminal_text(terminal_mode)
 	if panel.visible or ship.active_terminal!=null:
 		ghost.hide();prompt.text="ESC BACK / TAB FLIGHT PAPER" if ship.active_terminal else "ESC CLOSE"
+	elif paper_open:prompt.text="TAB LOWER CHECKLIST / J STOW / DELETE RECYCLE"
 	else:_update_aim()
 	if not paused_life:
 		life.tick_interactions(delta,shower_on and LifeArt.SHOWER_BOUNDS.has_point(ship.to_local(walker.global_position)))
@@ -98,10 +109,10 @@ func _process(delta:float) -> void:
 
 func _physics_process(delta:float) -> void:
 	if not life_ready or paused_life or life.game_over or not skip.is_empty():return
-	if not seated_pilot and not seated_table and ship.active_terminal==null:super._physics_process(delta)
+	if not seated_pilot and not seated_table and not paper_open and ship.active_terminal==null:super._physics_process(delta)
 	else:walker.velocity=Vector3.ZERO
 	var thrust:=Vector3.ZERO;var rotation_input:=Vector3.ZERO
-	var piloting:bool=seated_pilot and ship.active_terminal==null and not panel.visible and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED
+	var piloting:bool=seated_pilot and not paper_open and ship.active_terminal==null and not panel.visible and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED
 	if piloting:
 		thrust=Vector3(ship.key(KEY_D)-ship.key(KEY_A),ship.key(KEY_SPACE)-ship.key(KEY_CTRL),ship.key(KEY_S)-ship.key(KEY_W))
 		rotation_input=Vector3(ship.key(KEY_UP)-ship.key(KEY_DOWN),ship.key(KEY_LEFT)-ship.key(KEY_RIGHT),ship.key(KEY_Q)-ship.key(KEY_E))
@@ -125,7 +136,8 @@ func _advance_simulation(seconds:float,thrust:=Vector3.ZERO,rotation_input:=Vect
 	var actual:float=maxf(0,ship.flight.elapsed-before)
 	var before_day:int=life.day()
 	life.advance(actual*WORLD_HOURS_PER_SECOND)
-	if before_day!=life.day():printed=false;paper_in_tray=false
+	if before_day!=life.day() and printed:
+		message("New shipboard day. Collect a new work order from the hab printer.")
 	life_economy.tick(actual*WORLD_HOURS_PER_SECOND)
 	ship._update_flight_world()
 	if ship.flight.phase=="docked" and observed_phase!="docked":_arrived()
@@ -204,7 +216,7 @@ func _use_life(action:String) -> void:
 	if held>=0:message("Put the cargo down before using the hab.");return
 	if action in ["hab","sensors","provisions","repairs","bunk"]:open_terminal(action);return
 	if action=="paper":
-		if printed and printed_timer<=0:paper_in_tray=false;open_terminal("daily")
+		_collect_daily_paper()
 		return
 	if action=="shower":
 		shower_on=not shower_on;message("Shower running. Stand under the water to wash." if shower_on else "Shower off.");return
@@ -212,12 +224,70 @@ func _use_life(action:String) -> void:
 	var was_plate:int=life.table_bites
 	var reply:String=life.interact(action)
 	if action=="table" and was_plate<0 and life.table_bites>0:
-		seated_table=true;walker.position=Vector3(-0.7,0.05,-4.69);camera.position.y=1.28
-		walker.rotation.y=0;camera.look_at(Vector3(-1.15,0.96,-5.16),Vector3.UP)
+		_sit_at_table()
 	message(reply);_update_life_visuals()
+
+func _sit_at_table() -> void:
+	seated_table=true
+	var seat:Vector3=life_art.dining_seat.global_position
+	walker.global_position=Vector3(seat.x,ship.global_position.y+0.05,seat.z)
+	walker.velocity=Vector3.ZERO;walker.rotation=Vector3.ZERO
+	camera.global_position=seat+Vector3(0,0.72,0)
+	camera.look_at(life_art.table_plate.global_position+Vector3(0,0.04,0),Vector3.UP)
+	pitch=camera.rotation.x
+
+func _collect_daily_paper() -> void:
+	if not printed or not paper_in_tray or printed_timer>0:return
+	if held>=0 or not life.hand_item.is_empty():message("Put your carried item away before collecting the sheet.");return
+	paper_in_tray=false;paper_stowed=false
+	ship.flight.paper_visible=false;ship.paper_pinned=false;ship.flight_sheet.refresh()
+	message("Checklist collected. TAB brings it closer; J stows it; Delete recycles it.")
+	_update_life_visuals()
+
+func _set_paper_open(value:bool) -> void:
+	paper_open=value
+	if value:
+		paper_stowed=false
+		ship.flight.paper_visible=false;ship.paper_pinned=false;ship.flight_sheet.refresh()
+		paper_terminal_hidden=panel.visible
+		if paper_terminal_hidden:panel.hide();command.release_focus()
+	else:
+		if paper_terminal_hidden:panel.show();command.grab_focus()
+		paper_terminal_hidden=false
+	daily_paper.set_closeup(value)
+	_update_life_visuals()
+
+func _discard_daily_paper() -> void:
+	_set_paper_open(false)
+	printed=false;paper_in_tray=false;paper_text="";paper_stowed=false;printed_timer=0
+	_update_life_visuals()
+
+func _daily_paper_key(event:InputEvent) -> bool:
+	if not event is InputEventKey or not event.pressed or event.echo:return false
+	var code:int=event.physical_keycode if event.physical_keycode!=0 else event.keycode
+	if not life_ready or paused_life or life.game_over or not skip.is_empty():return false
+	if code==KEY_ESCAPE and paper_open:_set_paper_open(false);return true
+	var carried:bool=printed and not paper_in_tray
+	# Flight terminals retain their established route-paper controls.
+	if ship.active_terminal!=null or (ship.flight.paper_visible and not panel.visible and not paper_open):return false
+	if code==KEY_TAB and carried:
+		if held>=0 or not life.hand_item.is_empty():message("Put your carried item away to read the checklist.");return true
+		_set_paper_open(not paper_open);return true
+	if code==KEY_J and not panel.visible:
+		if not carried:message("Collect the printed checklist from the hab printer with F.");return true
+		if paper_open:_set_paper_open(false)
+		paper_stowed=not paper_stowed;_update_life_visuals();return true
+	if code==KEY_DELETE and carried and not paper_stowed and (not panel.visible or paper_open):
+		_discard_daily_paper();message("Daily sheet recycled.");return true
+	return false
+
+func _input(event:InputEvent) -> void:
+	# Capture Tab before a terminal LineEdit consumes it for keyboard focus.
+	if _daily_paper_key(event):get_viewport().set_input_as_handled()
 
 func _unhandled_input(event:InputEvent) -> void:
 	if not life_ready:return
+	if _daily_paper_key(event):return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var code:int=event.physical_keycode if event.physical_keycode!=0 else event.keycode
 		if code==KEY_F9:message(load_life(CHECKPOINT if life.game_over else LIFE_SAVE));return
@@ -238,10 +308,7 @@ func _unhandled_input(event:InputEvent) -> void:
 			return
 		if paused_life:return
 		if panel.visible:return
-		if code==KEY_J:
-			if printed and printed_timer<=0:paper_in_tray=false;open_terminal("daily")
-			else:message("Print your daily checklist at the hab terminal first.")
-			return
+		if paper_open:return
 		if code==KEY_G:
 			if seated_table:
 				seated_table=false;walker.position=Vector3(0,0.05,-4.65);walker.rotation=Vector3.ZERO;camera.position.y=1.62;pitch=0;camera.rotation=Vector3.ZERO;return
@@ -254,14 +321,18 @@ func _unhandled_input(event:InputEvent) -> void:
 			return
 		if code==KEY_P and seated_pilot:ship.flight.paper_visible=not ship.flight.paper_visible;ship.flight_sheet.refresh();return
 		if ship.paper_key(event):return
-	if paused_life or not skip.is_empty() or ship.active_terminal:return
+	if paused_life or not skip.is_empty() or ship.active_terminal or paper_open:return
 	super._unhandled_input(event)
 
 func _update_life_visuals() -> void:
 	if not life_art:return
 	var display:Dictionary=life.snapshot()
-	display.shower_on=shower_on;display.printed=printed and paper_in_tray;display.print_progress=1.0-printed_timer;display.paper_text=life.checklist_text();display.sensor_summary=life.sensor_text()
+	if printed and life.printed_day==life.day():paper_text=life.checklist_text()
+	display.shower_on=shower_on;display.printed=printed and paper_in_tray;display.print_progress=1.0-printed_timer;display.paper_text=paper_text;display.sensor_summary=life.sensor_text()
 	life_art.refresh(display)
+	if daily_paper:
+		daily_paper.set_text(paper_text)
+		daily_paper.visible=printed and not paper_in_tray and not paper_stowed and held<0 and life.hand_item.is_empty() and ship.active_terminal==null and not ship.flight.paper_visible and not panel.visible and skip.is_empty()
 	var key:String=life.hand_item+str(life.hand_bites)
 	if key!=visual_hand_key:
 		visual_hand_key=key
@@ -269,9 +340,10 @@ func _update_life_visuals() -> void:
 		life_hand=life_art.hand_prop(life.hand_item,life.hand_bites)
 		if life_hand:
 			camera.add_child(life_hand);life_hand.position=Vector3(0.24,-0.31,-0.62)
-	tool.visible=life.hand_item.is_empty() and not seated_pilot
+	tool.visible=life.hand_item.is_empty() and not seated_pilot and not seated_table and not daily_paper.visible
 
 func open_terminal(mode:String) -> void:
+	if paper_open:_set_paper_open(false)
 	terminal_mode=mode
 	terminal_history.clear()
 	terminal_live=mode in ["hab","daily","sensors","provisions","bunk"]
@@ -282,9 +354,8 @@ func open_terminal(mode:String) -> void:
 
 func _terminal_text(mode:String) -> String:
 	match mode:
-		"hab":return life.stock_text()+"\n\n"+life.checklist_text()+"\n\nstock / checklist / print / status / save / load"
-		"daily":return "PRINTED DAILY ROUTINE / LIVE COMPLETION\n\n"+life.checklist_text()+"\n\nJ reads this sheet. print refreshes the paper; discard recycles it."
-		"sensors":return life.sensor_text()+"\n\nstatus / check <sensor>"
+		"hab","daily":return life.stock_text()+"\n\n"+_daily_summary()+"\n\nstock / checklist / print / status / save / load"
+		"sensors":return life.calibration_text() if not life.calibration.is_empty() else life.sensor_text()
 		"provisions":return _provisions_text()
 		"repairs":return life.sensor_text()+"\n\nREPAIR ALL: %d CR\nquote <sensor|all> / repair <sensor|all>\nrepair emergency : repair failed sensors on account if funds are short."%life.repair_quote()
 		"bunk":return life.time_text()+"\n"+life.stock_text()+"\n\nsleep : bedtime 20:00–06:00, wake next 06:00\npass : complete checklist, then pass until bedtime\nemergency : inadequate supplies, 3 uses between port resupply\nFourth emergency rest ends the run.\n\n"+_travel_text()
@@ -307,11 +378,18 @@ func _command(text:String) -> void:
 	elif op=="load":output=load_life()
 	elif op=="status":output=_terminal_text(terminal_mode);terminal_live=terminal_mode in ["hab","daily","sensors","provisions","bunk"]
 	elif op=="stock":output=life.stock_text()+"\n\n"+_travel_text()
-	elif op=="checklist":output=life.checklist_text()
+	elif op=="checklist":output=_daily_summary()
 	elif op=="print" and terminal_mode in ["hab","daily"]:
-		printed=true;paper_in_tray=true;printed_timer=1.0;output="PRINTING / DAILY ROUTINE\n"+life.print_checklist()+"\nJ reads the sheet anywhere aboard."
-	elif op=="discard":printed=false;paper_in_tray=false;output="Daily paper recycled. Print another at the hab terminal."
-	elif op=="check" and terminal_mode=="sensors" and words.size()==2:output=life.check_sensor(words[1])+"\n\n"+life.sensor_text()
+		if printed:output="An existing sheet is in the tray or your possession. Recycle it with Delete or discard before printing another."
+		else:
+			printed=true;paper_in_tray=true;printed_timer=1.0;paper_text=life.print_checklist()
+			output="PRINTING / DAILY WORK ORDER\nCollect the sheet from the tray with F.\nTAB brings it closer; J stows it; Delete recycles it."
+	elif op=="discard":_discard_daily_paper();output="Daily paper recycled. Print another at the hab terminal."
+	elif op=="check" and terminal_mode=="sensors" and words.size()==2:output=life.check_sensor(words[1])
+	elif op=="trim" and terminal_mode=="sensors" and words.size()==3 and words[2].is_valid_int():output=life.trim_sensor(words[1],int(words[2]))
+	elif op=="test" and terminal_mode=="sensors":output=life.submit_sensor()+"\n\n"+life.sensor_text()
+	elif op=="resume" and terminal_mode=="sensors":output=life.calibration_text()
+	elif op=="cancel" and terminal_mode=="sensors":output=life.cancel_calibration()
 	elif op in ["sleep","pass","emergency"] and terminal_mode=="bunk":output=start_rest(op)
 	elif op=="buy" and terminal_mode=="provisions" and words.size()==3 and words[2].is_valid_int():output=buy_provisions(words[1],int(words[2]))
 	elif op=="refuel" and terminal_mode in ["provisions","depart"]:output=buy_fuel()
@@ -328,6 +406,9 @@ func _command(text:String) -> void:
 	if output!=previous_output:terminal_history.append(previous_output)
 	if terminal_history.size()>32:terminal_history.pop_front()
 	readout.text=output;readout.scroll_to_line(0);command.clear();_update_life_visuals()
+
+func _daily_summary() -> String:
+	return life.time_text()+"\nDAILY WORK ORDER / "+("COMPLETE" if life.checklist_complete() else "INCOMPLETE")+"\nPrint and collect the hab checklist for today's assigned sensor checks.\nYour paper records meal, water, hygiene and inspection completion."
 
 func _provisions_text() -> String:
 	return "PORT PROVISIONS / %d CR\n%s\n\nFOOD %d CR/day / WATER %d CR/day / capacity 12 each\nbuy food <days> / buy water <days> / refuel\nFuel %.0f / 3000 kg; fill costs %d CR\nadvance : optional essential shortfall against accepted fee\nBuying both food and water here resets emergency rest.\n\n%s"%[economy.credits,life.stock_text(),FOOD_PRICE,WATER_PRICE,ship.flight.fuel,_fuel_cost(),_travel_text()]
@@ -534,7 +615,7 @@ func complete_delivery() -> bool:
 	return ok
 
 func _guide_text() -> String:
-	return "COMPLETE SHIP LIFE TEST\n\n1. Dock CONTRACTS: jobs, accept 1 (small) or accept 2 (full).\n2. PROVISIONS beside it: buy food 12 / buy water 12 / refuel.\n3. F carry cargo; R/T rotate; pack racks; cargo-lock button.\n4. Flight: cockpit CHECKLIST print, CHART plot/print, NAV coords/burn/reserve/load.\n   ENGINE port on / starboard on; COMMS request/code; CHECKLIST hatch close/ramp raise.\n   COMMS depart, G pilot seat, manual exit, NAV engage, G stand.\n   OR dock DEPARTURE: start test to begin a prepared cruise.\n5. HAB computer: stock / print. J reads the daily paper.\n6. Fridge → oven → cooked plate → table → five F bites → plate → sink.\n7. Cabinet → cooler → F drink → sink. Shower periodically in bathroom.\n8. ENGINEERING sensors: status, check <sensor> for today's two checks.\n9. Bunk: pass until20:00, then sleep until06:00. Black progress shows the skip.\n10. Arrival wakes90s early. NAV approach / auto dock, or fly manually.\n11. CHECKLIST ramp lower / hatch open. Unlock cargo, unload, F complete at DELIVERY.\n\nF5 save / F9 load / ESC pause / G stand from table or pilot seat.\nThis session has its own save; your old flight progress is preserved."
+	return "COMPLETE SHIP LIFE TEST\n\n1. Dock CONTRACTS: jobs, accept 1 (small) or accept 2 (full).\n2. PROVISIONS beside it: buy food 12 / buy water 12 / refuel.\n3. F carry cargo; R/T rotate; pack racks; cargo-lock button.\n4. Flight: cockpit CHECKLIST print, CHART plot/print, NAV coords/burn/reserve/load.\n   ENGINE port on / starboard on; COMMS request/code; CHECKLIST hatch close/ramp raise.\n   COMMS depart, G pilot seat, manual exit, NAV engage, G stand.\n   OR dock DEPARTURE: start test to begin a prepared cruise.\n5. HAB computer: stock / print, F collect at tray. TAB inspect / J stow / DEL recycle.\n6. Fridge → oven → cooked plate → table → five F bites → plate → sink.\n7. Cabinet → cooler → F drink → sink. Shower periodically in bathroom.\n8. Read assigned sensors on your paper. ENGINEERING: check <sensor>, trim a/b/c, test.\n9. Bunk: pass until20:00, then sleep until06:00. Black progress shows the skip.\n10. Arrival wakes90s early. NAV approach / auto dock, or fly manually.\n11. CHECKLIST ramp lower / hatch open. Unlock cargo, unload, F complete at DELIVERY.\n\nF5 save / F9 load / ESC pause / G stand from table or pilot seat.\nThis session has its own save; your old flight progress is preserved."
 
 func _save_path(path:String) -> String:
 	if "--ship-life-test" in OS.get_cmdline_user_args() and path.begins_with("user://"):
@@ -545,7 +626,7 @@ func save_life(path:String=LIFE_SAVE) -> String:
 	if not life_ready:return "Session not ready."
 	if not skip.is_empty() or ship.ramp_moving or ship.loading_module.hatch_moving:return "Finish rest or moving hatch/ramp before saving."
 	ship.sync_hardware()
-	var data:Dictionary={"version":1,"life":life.snapshot(),"economy":life_economy.snapshot(),"flight":ship.flight.snapshot(),"parcels":parcels.duplicate(true),"manifest":packing.manifest.duplicate(true),"solution":packing.solution_order.duplicate(),"racked":packing.placements.duplicate(true),"floor":floor_packing.placements.duplicate(true),"held":held,"held_size":held_size,"locked":locked,"walker":walker.transform,"camera":camera.transform,"seated_pilot":seated_pilot,"seated_table":seated_table,"printed":printed,"paper_in_tray":paper_in_tray,"case_poses":{},"roles":[],"maps":[]}
+	var data:Dictionary={"version":1,"life":life.snapshot(),"economy":life_economy.snapshot(),"flight":ship.flight.snapshot(),"parcels":parcels.duplicate(true),"manifest":packing.manifest.duplicate(true),"solution":packing.solution_order.duplicate(),"racked":packing.placements.duplicate(true),"floor":floor_packing.placements.duplicate(true),"held":held,"held_size":held_size,"locked":locked,"walker":walker.transform,"camera":camera.transform,"seated_pilot":seated_pilot,"seated_table":seated_table,"printed":printed,"paper_in_tray":paper_in_tray,"paper_text":paper_text,"paper_stowed":paper_stowed,"case_poses":{},"roles":[],"maps":[]}
 	for id in cases:data.case_poses[id]=cases[id].global_transform
 	for terminal in ship.terminals:
 		data.roles.append(terminal.kind)
@@ -587,6 +668,9 @@ func load_life(path:String=LIFE_SAVE) -> String:
 			cases[id].reparent(walker);_case_body(id).collision_layer=0
 	if held>=0:_update_carry()
 	seated_pilot=bool(data.get("seated_pilot",false));seated_table=bool(data.get("seated_table",false));printed=bool(data.get("printed",false));paper_in_tray=bool(data.get("paper_in_tray",false));printed_timer=0
+	paper_text=str(data.get("paper_text",life.checklist_text() if printed and life.printed_day==life.day() else "Previous day work order. Recycle and reprint at HAB."))
+	paper_stowed=bool(data.get("paper_stowed",false));paper_open=false;paper_terminal_hidden=false;daily_paper.set_closeup(false,true)
+	if seated_table:_sit_at_table()
 	ship.ramp_up=ship.flight.ramp_raised;ship.ramp_pivot.rotation.x=-PI/2 if ship.ramp_up else atan(1.2/4.2);ship.ramp_fold.rotation.x=PI if ship.ramp_up else 0
 	ship.loading_module.hatch_open=not ship.flight.hatch_closed
 	for i in 2:ship.loading_module.leaves[i].position.x=(-1 if i==0 else 1)*(2.14 if ship.loading_module.hatch_open else 0.70)
@@ -647,6 +731,9 @@ func _run_life_tests() -> void:
 	get_tree().quit(0 if ok else 1)
 
 func _capture_life() -> void:
+	if "--survival-revision" in OS.get_cmdline_user_args():
+		await _capture_survival_revision()
+		return
 	walker.position=Vector3(0,0.05,-5.3);walker.rotation=Vector3.ZERO
 	camera.look_at(Vector3(1.3,1.3,-7),Vector3.UP)
 	await get_tree().create_timer(1).timeout
@@ -660,4 +747,36 @@ func _capture_life() -> void:
 	await get_tree().create_timer(1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/ship-life-sleep-progress.png")
+	get_tree().quit()
+
+func _capture_survival_revision() -> void:
+	set_physics_process(false)
+	life.hand_item="meal";life.hand_bites=5
+	_use_life("table")
+	await get_tree().create_timer(0.5).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/survival-seat.png")
+	# Show the supporting cushion from a side angle as well as the seated view.
+	var seat_pose:Transform3D=camera.global_transform
+	camera.global_position=Vector3(-0.25,1.6,-4.5)
+	camera.look_at(life_art.dining_seat.global_position,Vector3.UP)
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/survival-bench.png")
+	camera.global_transform=seat_pose
+	seated_table=false;walker.position=Vector3(0,0.05,-5.3);camera.position=Vector3(0,1.62,0);walker.rotation=Vector3.ZERO;camera.rotation=Vector3.ZERO
+	open_terminal("hab");_command("print");panel.hide();printed_timer=0;_collect_daily_paper()
+	await get_tree().create_timer(0.5).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/survival-paper-carried.png")
+	_set_paper_open(true)
+	await get_tree().create_timer(0.3).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/survival-paper-read.png")
+	_set_paper_open(false)
+	open_terminal("sensors");_command("check "+life.selected_sensors[0])
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/survival-calibration.png")
+	_command("test")
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/survival-degraded.png")
 	get_tree().quit()

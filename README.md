@@ -4,6 +4,8 @@ Launch **[Test Ship Life.command](Test%20Ship%20Life.command)** for the combined
 
 Food preparation, five-bite meals, washing plates and glasses, periodic showers, hab inventory/checklist printing, daily sensor care, shared world time, 06:00 wake-ups, black-screen time-skip progress, emergency rest, paid supplies/fuel, and optional contract advances are implemented here. Both ordinary cockpit departure and an explicitly labelled **start test** prepared-cruise option lead into real flight, arrival and cargo delivery.
 
+At HAB, `print` produces a sheet to collect with **F**; **Tab** inspects it, **J** stows it, and **Delete** recycles it. Read the assigned sensor names on the paper, then use Engineering `check <sensor>`, `trim <a|b|c> <amount>`, and `test` to solve calibration puzzles. Failed tests show **DEGRADED** and can be retried.
+
 This session saves separately as `ship_life_v1.json`; **F5** saves and **F9** loads. An emergency end-of-run uses F9 to restore its departure checkpoint. Existing `Fly Longhaul.command` progress and the cargo-only test are preserved. The default project scene still opens the previous Longhaul build; use the new launcher for all combined loops.
 
 ## Project documentation

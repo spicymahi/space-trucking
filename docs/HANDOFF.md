@@ -22,6 +22,8 @@ Flight and map are user-approved. The cargo loop is also user-approved, but curr
 
 The older `LIFE_SLICE.md` documents a separate prototype, not the newly agreed survival loop.
 
+Latest survival refinement: dining seats use the physical bench-cushion marker, not an aisle offset. Hab printing produces a carried sheet (`ship_life_paper.gd`): F collect, Tab inspect, J stow, Delete recycle. Assigned checks are disclosed on paper only; Engineering reports condition and runs three-channel trim/test puzzles. Failed submissions set DEGRADED and 1.5× wear; successful retries clear calibration faults without repairing condition. Existing version-1 saves load with defaults for new paper/puzzle fields. Completed checks: 111 state, 136 combined integration, 19 actual-flight; rendered seat, paper, and puzzle views inspected.
+
 ## Cargo implementation details worth preserving
 
 The controller owns interactions, hand-tool carrying, physical boxes, grids, terminals, contract transitions and the explicit test transfer. Packing is a pure rules model shared by the two ship racks and the pickup/delivery/staging floor grids. Economy owns station supply/demand, reservations, offers, lifecycle and payment; visuals build the dock, racks, grids and crates.
