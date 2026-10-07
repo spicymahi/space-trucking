@@ -1,0 +1,356 @@
+{
+  "scope": "Blender mesh/clearance checks only; live Godot collisions, screen binding, cargo/flight/survival interactions remain to be integrated and tested.",
+  "checks": [
+    {
+      "check": "Finite hangar geometry",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Open doorway clear: 18 m wide and 9 m high above sill",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "Straight-in swept ship envelope at 2 m hover clearance",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "Final vertical landing envelope clear",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 01 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 02 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 03 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 04 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 05 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 06 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 07 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 08 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 09 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 10 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 11 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "pickup grid 12 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 01 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 02 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 03 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 04 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 05 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 06 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 07 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 08 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 09 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 10 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 11 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "delivery grid 12 free of fixed equipment",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "1.8 m person / central cargo walkway",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.39,
+        "nearest": "01 Deck and cargo markings / Deck substrate / frame"
+      }
+    },
+    {
+      "check": "1.8 m person / ramp to every service terminal",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.372,
+        "nearest": "01 Deck and cargo markings / Paint / white"
+      }
+    },
+    {
+      "check": "1.8 m person / front access to cargo side -1",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.3785,
+        "nearest": "01 Deck and cargo markings / Paint / white"
+      }
+    },
+    {
+      "check": "1.8 m person / cargo row access (-1, 0)",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.3785,
+        "nearest": "01 Deck and cargo markings / Paint / white"
+      }
+    },
+    {
+      "check": "1.8 m person / cargo row access (-1, 1)",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.371,
+        "nearest": "01 Deck and cargo markings / Paint / yellow"
+      }
+    },
+    {
+      "check": "1.8 m person / cargo row access (-1, 2)",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.3785,
+        "nearest": "01 Deck and cargo markings / Paint / white"
+      }
+    },
+    {
+      "check": "1.8 m person / front access to cargo side 1",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.3785,
+        "nearest": "01 Deck and cargo markings / Paint / white"
+      }
+    },
+    {
+      "check": "1.8 m person / cargo row access (1, 0)",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.3785,
+        "nearest": "01 Deck and cargo markings / Paint / white"
+      }
+    },
+    {
+      "check": "1.8 m person / cargo row access (1, 1)",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.371,
+        "nearest": "01 Deck and cargo markings / Paint / yellow"
+      }
+    },
+    {
+      "check": "1.8 m person / cargo row access (1, 2)",
+      "passed": true,
+      "details": {
+        "radius_clearance_m": 0.3785,
+        "nearest": "01 Deck and cargo markings / Paint / white"
+      }
+    },
+    {
+      "check": "Four independent pressure-door leaves",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "HangarDoorLeaf_1 pocket clearance frame 1",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "HangarDoorLeaf_2 pocket clearance frame 1",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "HangarDoorLeaf_3 pocket clearance frame 1",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "HangarDoorLeaf_4 pocket clearance frame 1",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "Door leaves mutually separated frame 1",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "HangarDoorLeaf_1 pocket clearance frame 40",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "HangarDoorLeaf_2 pocket clearance frame 40",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "HangarDoorLeaf_3 pocket clearance frame 40",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "HangarDoorLeaf_4 pocket clearance frame 40",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "Door leaves mutually separated frame 40",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "HangarDoorLeaf_1 pocket clearance frame 80",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "HangarDoorLeaf_2 pocket clearance frame 80",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "HangarDoorLeaf_3 pocket clearance frame 80",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "HangarDoorLeaf_4 pocket clearance frame 80",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "Door leaves mutually separated frame 80",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Existing Longhaul landing feet meet hangar floor",
+      "passed": true,
+      "details": 1.1920928955078125e-07
+    },
+    {
+      "check": "Ship fits entrance at 2 m hover",
+      "passed": true,
+      "details": {
+        "min": [
+          -5.437999725341797,
+          -11.720000267028809,
+          1.1920928955078125e-07
+        ],
+        "max": [
+          5.437999725341797,
+          14.73900032043457,
+          5.659999847412109
+        ]
+      }
+    },
+    {
+      "check": "Both station bays instance the same hangar collection",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Twelve pickup grid bindings",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Twelve delivery grid bindings",
+      "passed": true,
+      "details": null
+    }
+  ],
+  "passed": 59,
+  "total": 59,
+  "hangar_evaluated_triangles": 294020,
+  "ship_bounds_m": {
+    "min": [
+      -5.437999725341797,
+      -11.720000267028809,
+      1.1920928955078125e-07
+    ],
+    "max": [
+      5.437999725341797,
+      14.73900032043457,
+      5.659999847412109
+    ]
+  }
+}

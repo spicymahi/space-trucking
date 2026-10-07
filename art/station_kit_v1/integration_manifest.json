@@ -1,0 +1,366 @@
+{
+  "hangar_clear": {
+    "min": [
+      -14,
+      -33,
+      0
+    ],
+    "max": [
+      14,
+      19,
+      10
+    ]
+  },
+  "door_clear": {
+    "min": [
+      -9,
+      -35,
+      0
+    ],
+    "max": [
+      9,
+      -33,
+      9
+    ]
+  },
+  "cargo_spine": {
+    "min": [
+      -2,
+      -32,
+      0
+    ],
+    "max": [
+      2,
+      -15.5,
+      2.4
+    ]
+  },
+  "ship_source_bbox_m": {
+    "min": [
+      -5.438,
+      -11.72,
+      0
+    ],
+    "max": [
+      5.438,
+      14.739,
+      5.745
+    ]
+  },
+  "game_to_blender": {
+    "x": "x",
+    "y": "-z",
+    "z": "y + 1.315"
+  },
+  "grid": {
+    "cell_m": 0.45,
+    "dimensions": [
+      4,
+      3,
+      4
+    ],
+    "pickup_count": 12,
+    "delivery_count": 12
+  },
+  "station_bay_origins": [
+    [
+      -27,
+      0,
+      0
+    ],
+    [
+      27,
+      0,
+      0
+    ]
+  ],
+  "terminal_bindings": {
+    "PICKUP_01": {
+      "position": [
+        -6.25,
+        -20.149999618530273,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_02": {
+      "position": [
+        -8.850000381469727,
+        -20.149999618530273,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_03": {
+      "position": [
+        -11.449999809265137,
+        -20.149999618530273,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_04": {
+      "position": [
+        -6.25,
+        -22.700000762939453,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_05": {
+      "position": [
+        -8.850000381469727,
+        -22.700000762939453,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_06": {
+      "position": [
+        -11.449999809265137,
+        -22.700000762939453,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_07": {
+      "position": [
+        -6.25,
+        -25.25,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_08": {
+      "position": [
+        -8.850000381469727,
+        -25.25,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_09": {
+      "position": [
+        -11.449999809265137,
+        -25.25,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_10": {
+      "position": [
+        -6.25,
+        -27.799999237060547,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_11": {
+      "position": [
+        -8.850000381469727,
+        -27.799999237060547,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "PICKUP_12": {
+      "position": [
+        -11.449999809265137,
+        -27.799999237060547,
+        0.0
+      ],
+      "binding": "pickup_grid"
+    },
+    "DELIVERY_01": {
+      "position": [
+        4.449999809265137,
+        -20.149999618530273,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_02": {
+      "position": [
+        7.050000190734863,
+        -20.149999618530273,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_03": {
+      "position": [
+        9.649999618530273,
+        -20.149999618530273,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_04": {
+      "position": [
+        4.449999809265137,
+        -22.700000762939453,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_05": {
+      "position": [
+        7.050000190734863,
+        -22.700000762939453,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_06": {
+      "position": [
+        9.649999618530273,
+        -22.700000762939453,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_07": {
+      "position": [
+        4.449999809265137,
+        -25.25,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_08": {
+      "position": [
+        7.050000190734863,
+        -25.25,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_09": {
+      "position": [
+        9.649999618530273,
+        -25.25,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_10": {
+      "position": [
+        4.449999809265137,
+        -27.799999237060547,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_11": {
+      "position": [
+        7.050000190734863,
+        -27.799999237060547,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "DELIVERY_12": {
+      "position": [
+        9.649999618530273,
+        -27.799999237060547,
+        0.0
+      ],
+      "binding": "delivery_grid"
+    },
+    "TERMINAL_CONTRACTS": {
+      "position": [
+        10.84000015258789,
+        -7.5,
+        1.4800000190734863
+      ],
+      "binding": "contracts"
+    },
+    "TERMINAL_PROVISIONS": {
+      "position": [
+        10.84000015258789,
+        -9.300000190734863,
+        1.4800000190734863
+      ],
+      "binding": "provisions"
+    },
+    "TERMINAL_REPAIRS": {
+      "position": [
+        10.84000015258789,
+        -11.100000381469727,
+        1.4800000190734863
+      ],
+      "binding": "repairs"
+    },
+    "TERMINAL_REFUEL": {
+      "position": [
+        10.84000015258789,
+        -12.899999618530273,
+        1.4800000190734863
+      ],
+      "binding": "refuel"
+    },
+    "TERMINAL_COMPLETE": {
+      "position": [
+        10.84000015258789,
+        -14.699999809265137,
+        1.4800000190734863
+      ],
+      "binding": "complete"
+    },
+    "TERMINAL_DEPARTURE": {
+      "position": [
+        -3.4000000953674316,
+        -18.049999237060547,
+        1.4500000476837158
+      ],
+      "binding": "depart"
+    },
+    "CREW_ACCESS": {
+      "position": [
+        12.0,
+        -26.0,
+        0.0
+      ],
+      "binding": "future_station_connection"
+    },
+    "SHIP_DOCK_ORIGIN": {
+      "position": [
+        0.0,
+        0.0,
+        1.315000057220459
+      ],
+      "binding": "ship_root"
+    },
+    "APPROACH_GATE": {
+      "position": [
+        0.0,
+        -45.0,
+        3.315000057220459
+      ],
+      "binding": "approach_gate"
+    },
+    "TOUCHDOWN": {
+      "position": [
+        0.0,
+        0.0,
+        1.315000057220459
+      ],
+      "binding": "touchdown"
+    },
+    "RAMP_CLEARANCE": {
+      "position": [
+        0.0,
+        -16.799999237060547,
+        0.0
+      ],
+      "binding": "keep_clear"
+    }
+  },
+  "limitations": [
+    "Blender only: no live terminal UI, physics or docking controller.",
+    "Docking begins nose-first along +Y; departure reverses along -Y.",
+    "Dock-root height is 1.315 m so existing landing feet meet floor: 0.115 m above the previous test apron alignment. Match ramp/collisions during integration.",
+    "Two below-floor notebook reference meshes are hidden in this review only.",
+    "Door animation is a review demonstration; runtime interlocks must be implemented during integration."
+  ]
+}
