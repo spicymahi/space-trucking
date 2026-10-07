@@ -1,5 +1,7 @@
 # Cream/red station exterior study
 
+**Rejected by the user as unrealistic.** Retained as history only; use the [five replacement directions](../exteriors-v2/README.md) for the current review.
+
 Generated 2026-10-06 with the built-in image-generation tool. The user favored the red hangar palette and requested its station exterior using the Station Inspo folder.
 
 [Exterior concept](01-exterior.png) · [Exact prompt](prompt.txt) · [Hangar reference](../hangar-colors/01-cream-red.png)
