@@ -69,7 +69,7 @@ var completion_receipt := ""
 func _ready() -> void:
 	DisplayServer.window_set_title("Space Trucking — Cargo Loop Test")
 	economy.setup()
-	ship = TrialShip.new()
+	ship = _create_ship()
 	add_child(ship)
 	dock = Art.dock(self)
 	floor_packing.grid = FLOOR_GRID
@@ -89,6 +89,9 @@ func _ready() -> void:
 		_run_tests.call_deferred()
 	elif "--cargo-trial-capture" in OS.get_cmdline_user_args():
 		_capture.call_deferred()
+
+func _create_ship() -> Node3D:
+	return TrialShip.new()
 
 func _build_racks() -> void:
 	for z in range(-1,7):

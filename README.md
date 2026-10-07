@@ -1,6 +1,14 @@
+## Complete ship-life test
+
+Launch **[Test Ship Life.command](Test%20Ship%20Life.command)** for the combined cargo, original cockpit/manual flight, and survival session. It starts at the dock with contracts, a PROVISIONS kiosk and a repair technician. Press **F1** in game for the walkthrough, or read the [complete test guide](docs/SHIP_LIFE_TEST.md).
+
+Food preparation, five-bite meals, washing plates and glasses, periodic showers, hab inventory/checklist printing, daily sensor care, shared world time, 06:00 wake-ups, black-screen time-skip progress, emergency rest, paid supplies/fuel, and optional contract advances are implemented here. Both ordinary cockpit departure and an explicitly labelled **start test** prepared-cruise option lead into real flight, arrival and cargo delivery.
+
+This session saves separately as `ship_life_v1.json`; **F5** saves and **F9** loads. An emergency end-of-run uses F9 to restore its departure checkpoint. Existing `Fly Longhaul.command` progress and the cargo-only test are preserved. The default project scene still opens the previous Longhaul build; use the new launcher for all combined loops.
+
 ## Project documentation
 
-Start with the [current handoff](docs/HANDOFF.md) for playable builds, source-file ownership, validation, and pending work. The [approved survival design](docs/SURVIVAL_DESIGN.md) records the next gameplay loop, including world time, provisions, daily care, emergency rest, and revised contract financing; these changes are **planned, not yet implemented**.
+Start with the [current handoff](docs/HANDOFF.md) for entry points, source files, tests and remaining tuning. The [survival design](docs/SURVIVAL_DESIGN.md) records the agreed behavior and distinguishes implemented test behavior from future balancing targets.
 
 ## Cargo loop test
 
