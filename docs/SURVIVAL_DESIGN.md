@@ -3,7 +3,7 @@
 Status: implemented in the combined ship-life test; updated 2026-10-06.
 Run `Test Ship Life.command` / `scenes/ship_life_trial.tscn`. The normal default flight scene and cargo-only trial retain their prior behavior; their saves are separate. See [SHIP_LIFE_TEST.md](SHIP_LIFE_TEST.md) for controls and actual test evidence.
 
-Initial tuning: one real second advances 0.12 shipboard hours (a day is 3 minutes 20 seconds). Quoted travel uses the existing flight solver, conservative full-load mass, and 120 seconds of departure/approach allowance. With that flight model, the shortest initial local offer is about 1–2 days, rather than the earlier below-one-day proposal; distant solver quotes stay below 9 days. Manual delays can lengthen a trip. Retuning very short local hops remains a balancing task; the accepted flight physics is preserved.
+Current pacing: one real second advances 24 shipboard seconds (1/150 hour), so one day takes 60 real minutes. This is 18× slower than the original survival test. Clock text rounds down to five-minute increments; simulation time remains precise. Flight durations retain existing physics, so local starting trips are below three game hours and the farthest initial single-leg quotes are around 11.5 hours. This pacing revision supersedes the original multi-day route targets until further playtesting.
 
 ## Intent
 
@@ -52,7 +52,7 @@ Enter the bathroom shower, turn it on, and remain under it while hygiene rises. 
 
 ## Daily checklist and sensor care
 
-Print the daily checklist at the cabin/hab terminal and collect the physical sheet from its tray with F. Carry it while walking, use Tab to bring it closer, J to stow/retrieve it, and Delete to recycle it. The paper lists eating, drinking, sufficient hygiene, and the two assigned sensors. The hab terminal reports overall completion; Engineering shows condition and test outcomes without revealing which sensors are due. The current-day sheet reflects completion; an old sheet retains its original day and assignments until recycled and replaced. At the Engineering terminal, Tab temporarily reveals the sheet and restores the previous terminal view afterward.
+Print the daily checklist at the cabin/hab terminal and collect the physical sheet from its tray with F. Carry it while walking, use H to stow/retrieve it, Tab to bring the held sheet closer, and F at the galley paper-recycling bin to discard it. J remains a stow alias; Delete and Mac Delete/Backspace are disposal shortcuts. Stowing leaves empty hands and Tab does not retrieve it implicitly. The lifting gun appears only while a box is held; putting the box down immediately holsters it. Picking up a box or dish stows the checklist until deliberately retrieved. The paper lists eating, drinking, sufficient hygiene, and the two assigned sensors. The hab terminal reports overall completion; Engineering shows condition and test outcomes without revealing which sensors are due. The current-day sheet reflects completion; an old sheet retains its original day and assignments until recycled and replaced. At the Engineering terminal, Tab temporarily reveals the sheet and restores the previous terminal view afterward.
 
 At Engineering, `check <sensor>` starts a short, untimed three-channel calibration puzzle. Use `trim <a|b|c> <signed amount>` to match displayed readings to references, then `test`. Correct readings pass and complete the inspection. Incorrect readings leave it incomplete and set DEGRADED, with 1.5× daily wear until corrected or repaired. Retrying is allowed; successful calibration clears the fault without restoring condition. `cancel` has no penalty; `resume` returns to unfinished work. Any sensor can be checked, so the terminal cannot reveal assignments by refusing unrelated checks. Implemented sensors: navigation, proximity, coolant, pressure, drive, communications. Two are assigned per day. Save files retain unfinished puzzles and degraded results; midnight cancels unfinished work and retains existing faults.
 
@@ -78,14 +78,14 @@ Keep at least one affordable/manageable local job available. Short jobs help pla
 
 ## Journey targets
 
-Original balancing targets (local/nearby durations still need tuning against the existing flight solver):
+Historical balancing targets (superseded by the slower-clock playtest; retained for design context):
 
 - Local: less than one shipboard day.
 - Nearby: 1–3 days.
 - Regional: 4–6 days.
 - Remote: 7–9 days.
 
-Initial longest single-leg journeys stay below 12 days so a full pantry leaves a reserve. Collection round trips can exceed that capacity and allow provisioning at the supplier. Longer single-leg journeys can later require intermediate provisioning stops or upgraded storage. Preserve the earlier target of roughly 30 minutes maximum active travel for the farthest route; sleep/pass-time can reduce actual session duration. The implemented conversion is 0.12 shipboard hours per flight-simulation second. Manual delays and time spent at port also advance the shared clock.
+The farthest route still targets roughly 30 minutes of active travel, with fewer game hours elapsed at the new clock rate. Sleep/pass-time can reduce actual session duration. A full pantry remains 12 days; provisioning and maintenance now cover several jobs instead of racing the fast clock. Manual delays and time spent at port also advance the shared clock. Pre-pacing saves retain elapsed progress and accepted fees; only future travel estimates and unsold offers are refreshed.
 
 ## Implementation and validation checklist
 

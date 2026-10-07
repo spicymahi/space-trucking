@@ -7,6 +7,8 @@ const HYGIENE_REQUIRED := 40.0
 const HYGIENE_LOSS_PER_DAY := 6.0
 const SENSOR_WEAR_PER_DAY := 1.0
 const COOK_SECONDS := 4.0
+const REAL_SECONDS_PER_DAY := 3600.0
+const WORLD_HOURS_PER_SECOND := 24.0 / REAL_SECONDS_PER_DAY
 const SENSOR_NAMES: Array[String] = ["navigation", "proximity", "coolant", "pressure", "drive", "communications"]
 const HAND_ITEMS: Array[String] = ["", "raw_food", "meal", "dirty_plate", "empty_glass", "water_glass", "used_glass"]
 
@@ -46,6 +48,8 @@ func hour() -> float:
 
 func time_text() -> String:
 	var minutes := int(floor(hour() * 60.0 + 0.00001))
+	# Round only the display down. The shared simulation retains precise time.
+	minutes -= minutes % 5
 	return "DAY %02d / %02d:%02d AST" % [day(), minutes / 60, minutes % 60]
 
 func advance(hours: float) -> void:

@@ -50,7 +50,9 @@ Use the bathroom shower control with **F**, then stand under the water. Hygiene 
 
 ## Hab checklist and engineering
 
-At **HAB**, `stock` shows food, water, hygiene, and remaining emergency rests. `checklist` shows overall completion; `print` feeds a physical work order into the tray. Close the terminal and use **F** on the finished sheet to collect it. It is visible in your hand while walking. **Tab** raises/lowers it for reading, **J** stows/retrieves it, and **Delete** recycles it. A sheet must be physically collected: J cannot retrieve it remotely from the printer. The tray becomes empty after collection. Carrying cargo or a dish temporarily hides the sheet.
+At **HAB**, `stock` shows food, water, hygiene, and remaining emergency rests. `checklist` shows overall completion; `print` feeds a physical work order into the tray. Close the terminal and use **F** on the finished sheet to collect it. It is visible in your hand while walking. **H** stows/retrieves it and **Tab** raises/lowers the sheet already in your hand. **J** remains an alias for H. A stowed sheet stays stowed when Tab is pressed. Use **F at the PAPER / RECYCLING slot in the galley waste cabinet** to throw away the sheet in your hand. Delete and the Mac Delete/Backspace key also work as shortcuts. A sheet must first be physically collected; no key retrieves it remotely from the printer. The tray becomes empty after collection. Picking up cargo or a dish stows the paper until you retrieve it again.
+
+Your hands are empty by default. The lifting tool appears only while a cargo box is held and disappears immediately on placement. The paper, food, plate, or glass appears only when that item is held; stowing or discarding a sheet never brings the gun back.
 
 The printed work order contains the day's assigned sensor names. Neither the engineering CLI, its wall screen, nor a terminal `checklist` shortcut labels sensors as due. Hab displays overall routine completion and stocks; print to obtain the assignments. The sheet reflects completed tasks during its own day. At midnight it remains yesterday's sheet; recycle it and print a new work order. A single sheet is tracked at a time. `discard` also recycles it at a terminal. **Tab at Engineering temporarily reveals the paper and then restores the same terminal view**; cockpit terminals retain their established flight-paper controls.
 
@@ -68,7 +70,7 @@ At the hangar **REPAIRS** terminal, `quote <sensor|all>` gives the cost and `rep
 
 ## World time, sleep, and arrival
 
-One saved Aurel Standard Time clock drives survival, sensor wear, flight, and the market. Ordinary simulation currently advances **0.12 shipboard hours per real simulation second**: one day is three minutes twenty seconds of active simulation. Time continues while reading an in-world terminal. **Esc** closes a terminal; **Esc** again pauses the session. Closing the game also stops time.
+One saved Aurel Standard Time clock drives survival, sensor wear, flight, and the market. Ordinary simulation currently advances **24 shipboard seconds per real second**: a full day takes **60 real minutes**, 18× slower than the original test. All clocks show five-minute increments (06:00, 06:05, 06:10); a visible step takes 12.5 real seconds. Internal time stays precise so rest, wear and arrival interrupts still happen at the correct boundaries. Time continues while reading an in-world terminal. **Esc** closes a terminal; **Esc** again pauses the session. Closing the game also stops time.
 
 At the bunk:
 
@@ -80,7 +82,9 @@ Skips advance the same simulation and operating costs as active time. They end e
 
 Board journey estimates come from the existing flight solver at the catalogue epoch, assuming 980 kg cargo mass and adding 120 seconds for departure/approach. They use the same clock conversion as actual travel. CHART replans for the current orbital positions, ship setup, and departure time, so its current route can differ. Manual delays and detours add time.
 
-Initial timing uses the existing approved flight physics: the shortest starting job is approximately **one to two shipboard days**, rather than the earlier proposed sub-day trip. The solver's maximum initial transfer plus the allowance is about **8.6 days**. These are gameplay estimates within the compressed flight world, not literal journeys calculated from catalogue kilometres. Collection quotes include both legs, so a round trip can exceed pantry capacity; provision again at the supplier. Readability of the system map remains independent of physical distance scale.
+Flight durations retain the existing approved physics. With the slower clock, a starting local job is below three shipboard hours and the longest initial solver quote is approximately 11.5 hours, including approach allowance. Fewer game days pass during each flight than in the earlier fast-clock test. The earlier 7–9-day remote-trip target is superseded by this pacing revision pending further playtesting. These are gameplay estimates within the compressed flight world, not literal journeys calculated from catalogue kilometres. Collection quotes include both legs. Readability of the system map remains independent of physical distance scale.
+
+Loading a pre-pacing save preserves elapsed time, supplies, wear, wallet, advances, accepted fees, and flight progress. Future estimates are recalculated at the slower clock rate and unaccepted cached offers expire; completed historical receipts are retained.
 
 ## Emergency rest and operating money
 
@@ -124,11 +128,11 @@ The legacy engineering puzzle and legacy automatic supplies service are not the 
 
 ## Verification
 
-Latest completed checks: **111 state, 136 combined integration, and 19 complete-flight checks passed** for the seat/paper/calibration revision. The unchanged economy last passed 372 checks. Existing cargo regressions also passed: 47 packing assertions (including 600 generated manifests), 446 economy assertions, and 108 controller assertions.
+Latest completed checks: **116 state, 375 economy, 150 combined integration, and 19 complete-flight checks passed** for the pacing/empty-hands/recycling revision. The new checks include real H/Backspace input events, physical bin targeting, persistent stowing, cargo-tool lifecycle, five-minute clock boundaries, and old-clock save migration. Existing cargo regressions also passed: 47 packing assertions (including 600 generated manifests), 446 economy assertions, and 108 controller assertions.
 
 The integration suite exercises the real scene/fixture rays, provisions and cooking, drinking/shower/checks, rest and arrival interruption, cockpit CLI departure and cargo/sensor interlocks, printing, finance, and save restoration. The following flight suite runs actual injection, coast, braking, approach, nose-first autodocking, arrival bookkeeping, animated hatch/ramp opening, unloading, and one-time payment. Some fixture setup and cargo placement use controller methods directly; these are not exclusively input-driven tests. Both suites hash existing normal/combined/checkpoint saves before and after; test writes are redirected into `/tmp`.
 
-Rendered checks confirmed the centered bench seat, carried and enlarged checklist, calibration prompt, and degraded result. Earlier checks also confirmed the hab fixtures, stock terminal, and centered black-screen sleep progress display. Physical interaction checks covered all new fixture rays, the meal/glass workflow, dining-seat exit, and entry into the shower. User playtesting is the next step for pacing and comfort.
+Rendered checks confirmed empty hands after stowing, the galley recycling slot and discarded-sheet view, as well as the centered bench seat, carried/enlarged checklist, calibration prompt, and degraded result. Earlier checks also confirmed the hab fixtures, stock terminal, and centered black-screen sleep progress display. Physical interaction checks covered all new fixture rays, the meal/glass workflow, dining-seat exit, and entry into the shower. User playtesting is the next step for pacing and comfort.
 
 Run from the repository root:
 

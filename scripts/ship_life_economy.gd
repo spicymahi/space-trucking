@@ -6,7 +6,7 @@ extends "res://scripts/cargo_trial_economy.gd"
 const SAVE_VERSION := 1
 const PORT_SUPPLIES := "Port supplies"
 const FlightState = preload("res://scripts/longhaul_flight_state.gd")
-const WORLD_HOURS_PER_SECOND := 0.12
+const WORLD_HOURS_PER_SECOND := preload("res://scripts/ship_life_state.gd").WORLD_HOURS_PER_SECOND
 var debt := 0
 var _economy_remainder := 0.0
 var _route_quote_cache: Dictionary = {}
@@ -215,7 +215,7 @@ func snapshot() -> Dictionary:
 	for key in _offer_cache: cache[str(key)] = _offer_cache[key].duplicate(true)
 	return {"version":SAVE_VERSION, "stations":stations.duplicate(true), "active":active.duplicate(true),
 		"receipts":receipts.duplicate(true), "credits":credits, "station":station, "debt":debt,
-		"elapsed_hours":elapsed_hours, "error":error, "offer_cache":cache, "serial":_serial,
+		"elapsed_hours":elapsed_hours, "clock_rate":WORLD_HOURS_PER_SECOND, "error":error, "offer_cache":cache, "serial":_serial,
 		"economy_remainder":_economy_remainder,
 		"rng_seed":str(_rng.seed), "rng_state":str(_rng.state)}
 
@@ -268,6 +268,17 @@ func restore(data: Dictionary) -> bool:
 	_serial = int(data.get("serial", 0))
 	_rng.seed = int(data.rng_seed)
 	_rng.state = int(data.rng_state)
+	_route_quote_cache.clear()
+	# Older builds used 0.12 hours per second. Keep balances, accepted fees and
+	# elapsed calendar time; revise only future travel estimates and unsold offers.
+	if not is_equal_approx(float(data.get("clock_rate", 0.12)), WORLD_HOURS_PER_SECOND):
+		_offer_cache.clear()
+		if not active.is_empty() and active.phase != "complete":
+			var hours := 0.0
+			for leg in active.legs:
+				leg.world_hours = _leg_quote(int(leg.from), int(leg.to)).world_hours
+				hours += float(leg.world_hours)
+			active.world_hours = snappedf(hours, 0.1)
 	return true
 
 func _valid_contract(contract: Dictionary, allow_empty: bool = false) -> bool:

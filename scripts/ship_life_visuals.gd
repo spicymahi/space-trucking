@@ -26,6 +26,8 @@ var repairs_readout: Label3D
 var oven_lamp: MeshInstance3D
 var last_table_bites := -999
 var dining_seat: Marker3D
+var recycled_sheet: Node3D
+var recycle_motion: Tween
 
 func build(parent: Node3D, ship: Node3D) -> Dictionary:
 	name = "ShipLifeVisuals"
@@ -109,6 +111,24 @@ func _galley() -> void:
 	Art.box(cooler, Vector3(0, -0.072, 0.206), Vector3(0.038, 0.064, 0.071), ORANGE)
 	Art.box(cooler, Vector3(0, -0.201, 0.243), Vector3(0.32, 0.035, 0.20), DARK)
 	_target("water", Vector3(1.28, 1.26, -6.48), Vector3(0.10, 0.48, 0.36))
+	# Reuse the existing WASTE cabinet below the worktop; keep the aisle clear.
+	var bin := _group(Vector3(0.925, 0.59, -7.46), -PI/2)
+	Art.box(bin, Vector3.ZERO, Vector3(0.61, 0.32, 0.035), CREAM)
+	Art.box(bin, Vector3(0, 0.045, 0.022), Vector3(0.48, 0.068, 0.012), DARK)
+	_label(bin, "PAPER / RECYCLING", Vector3(0, 0.128, 0.029), 0.00078, DARK)
+	_label(bin, "[F] DISCARD SHEET", Vector3(0, -0.093, 0.029), 0.00078, DARK)
+	_target("trash", Vector3(0.887, 0.59, -7.46), Vector3(0.06, 0.35, 0.64))
+	recycled_sheet = _group(Vector3.ZERO, 0, bin)
+	Art.box(recycled_sheet, Vector3.ZERO, Vector3(0.24, 0.025, 0.15), Color("efe0b7"))
+	recycled_sheet.hide()
+
+func recycle_paper() -> void:
+	if recycle_motion: recycle_motion.kill()
+	recycled_sheet.position = Vector3(0, 0.045, 0.13)
+	recycled_sheet.show()
+	recycle_motion = create_tween()
+	recycle_motion.tween_property(recycled_sheet, "position:z", -0.075, 0.45)
+	recycle_motion.tween_callback(recycled_sheet.hide)
 
 func _hab() -> void:
 	# Seat reference is the middle of the actual Blender/legacy bench cushion.

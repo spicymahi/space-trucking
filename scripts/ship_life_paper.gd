@@ -54,7 +54,7 @@ func build(camera: Camera3D) -> void:
 func set_text(words: String) -> void:
 	if words == last_text: return
 	last_text = words
-	ink.text = "LONGHAUL / DAILY WORK ORDER\n--------------------------------\n" + words + "\n\n--------------------------------\nTAB  raise / lower     J  stow\nDEL  recycle"
+	ink.text = "LONGHAUL / DAILY WORK ORDER\n--------------------------------\n" + words + "\n\n--------------------------------\nTAB  raise / lower\nH    stow / retrieve\nF    at galley bin to recycle"
 
 func set_closeup(value: bool, instant := false) -> void:
 	closeup = value

@@ -68,6 +68,17 @@ func calibration_checks() -> void:
 
 func run() -> void:
 	calibration_checks()
+	var clock=Life.new()
+	clock.advance(4.999/60.0)
+	check(clock.time_text()=="DAY 01 / 06:00 AST", "clock display rounds down rather than counting every minute")
+	clock.advance(0.001/60.0)
+	check(clock.time_text()=="DAY 01 / 06:05 AST", "clock reaches the next five-minute display boundary")
+	clock.elapsed_hours=23.999
+	check(clock.time_text()=="DAY 01 / 23:55 AST", "rounded clock never advertises tomorrow before midnight")
+	clock.advance(0.001)
+	check(clock.time_text()=="DAY 02 / 00:00 AST", "calendar rollover retains correct day with rounded clock")
+	clock=Life.new();clock.advance(3600.0*Life.WORLD_HOURS_PER_SECOND)
+	check(clock.day()==2 and is_equal_approx(clock.hour(),6.0), "one real hour is exactly one game day")
 	var life = Life.new()
 	check(life.day() == 1 and close(life.hour(), 6.0), "initial calendar is day1 at06")
 	check(life.time_text() == "DAY 01 / 06:00 AST", "calendar formats stable shared clock")

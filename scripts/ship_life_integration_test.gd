@@ -27,6 +27,7 @@ func run(controller: Node3D) -> bool:
 	host.paused_life = false
 	host.panel.hide()
 	check(host.life.day() == 1 and host.life.hour() == 6.0, "fresh scene starts at06 with shared life clock")
+	check(not host.tool.visible and not host.daily_paper.visible, "fresh player has empty hands")
 	check(host.ship.controller == host and host.economy == host.life_economy, "flight and cargo use the combined controller")
 	await _provision_and_accept()
 	await _kitchen()
@@ -92,23 +93,33 @@ func _provision_and_accept() -> void:
 	check(host.daily_paper.ink.text.contains(host.life.selected_sensors[0]), "real paper texture names today's assigned checks")
 	press(KEY_TAB)
 	check(not host.paper_open and host.daily_paper.visible and host.walker.position==before, "lowering sheet preserves carried paper and player position")
-	press(KEY_J)
-	check(host.paper_stowed and not host.daily_paper.visible, "J stows the collected sheet")
-	press(KEY_J)
-	check(not host.paper_stowed and host.daily_paper.visible, "J retrieves the same sheet without printing duplicates")
-	press(KEY_DELETE)
-	check(not host.printed and not host.paper_in_tray and not host.daily_paper.visible, "Delete recycles the actual carried sheet")
+	await real_key(KEY_H)
+	check(host.paper_stowed and not host.daily_paper.visible and not host.tool.visible, "real H input stows sheet once and leaves empty hands")
+	press(KEY_TAB)
+	check(host.paper_stowed and not host.paper_open and not host.daily_paper.visible, "Tab cannot silently retrieve a stowed sheet")
+	await real_key(KEY_H)
+	check(not host.paper_stowed and host.daily_paper.visible and not host.tool.visible, "real H input retrieves paper without showing the cargo gun")
+	await use_fixture("trash",Vector3(0,0.05,-7.46))
+	check(not host.printed and not host.paper_in_tray and not host.daily_paper.visible and not host.tool.visible, "F at physical recycling bin destroys sheet and leaves empty hands")
+	check(host.life_art.recycled_sheet.visible, "recycling bin visibly accepts the paper")
+	press(KEY_H)
+	check(not host.printed and not host.daily_paper.visible, "discarded paper cannot be retrieved")
 	host.open_terminal("hab")
 	host._command("print")
 	host.printed_timer = 0.0
 	host._update_life_visuals()
 	await use_fixture("paper",Vector3(-0.65,0.05,-4.80))
 	check(host.printed and not host.paper_in_tray and host.daily_paper.visible, "replacement print can be physically collected")
+	await real_key(KEY_BACKSPACE)
+	check(not host.printed and not host.daily_paper.visible and not host.tool.visible, "Mac Delete Backspace shortcut also clears the held sheet")
+	host.open_terminal("hab");host._command("print");host.printed_timer=0;host._update_life_visuals()
+	await use_fixture("paper",Vector3(-0.65,0.05,-4.80))
 	host.panel.hide()
 
 func _kitchen() -> void:
 	await use_fixture("fridge",Vector3(0,0.05,-5.60))
 	check(host.life.hand_item == "raw_food" and host.life.food_stock == 3, "F on physical fridge reserves one food day")
+	check(host.paper_stowed and not host.daily_paper.visible and not host.tool.visible, "kitchen pickup stows paper and never equips cargo gun")
 	check(is_instance_valid(host.life_hand) and host.life_hand.get_parent() == host.camera, "carried meal pack has a visible camera prop")
 	await use_fixture("oven",Vector3(0,0.05,-7.02))
 	check(host.life.oven_state == "cooking" and host.life.hand_item == "", "physical oven receives food and starts cooking")
@@ -136,6 +147,7 @@ func _kitchen() -> void:
 	check(not host.seated_table, "G leaves dining seat")
 	await use_fixture("sink",Vector3(0,0.05,-8.12))
 	check(host.life.hand_item == "" and not host.life_art.table_plate.visible, "sink F washes plate and clears the next meal's place")
+	check(not host.tool.visible and not host.daily_paper.visible and host.paper_stowed, "putting dish away keeps hands empty and paper stowed")
 	await use_fixture("cabinet",Vector3(0,0.05,-6.63))
 	check(host.life.hand_item == "empty_glass", "overhead glass cabinet is reachable")
 	await use_fixture("water",Vector3(0,0.05,-6.48))
@@ -159,6 +171,7 @@ func _shower_and_checks() -> void:
 	host._process(2.0)
 	check(is_equal_approx(host.life.hygiene,clean), "running shower cannot clean player outside its bounds")
 	host.shower_on = false
+	await real_key(KEY_H)
 	await use_fixture("sensors",Vector3(0,0.05,8.15))
 	check(host.panel.visible and host.terminal_mode == "sensors", "engineering sensor screen is physically accessible")
 	host._command("status")
@@ -190,7 +203,10 @@ func _shower_and_checks() -> void:
 func _rest_clock() -> void:
 	var before: float = host.life.elapsed_hours
 	host._advance_simulation(10.0)
-	check(is_equal_approx(host.life.elapsed_hours-before,10.0*host.WORLD_HOURS_PER_SECOND), "active controller advances one universal world clock")
+	check(is_equal_approx(host.life.elapsed_hours-before,4.0/60.0), "ten real seconds advance only four shipboard minutes")
+	check(host.life.time_text().contains("06:00"), "clock masks sub-five-minute precision")
+	host._advance_simulation(2.5)
+	check(host.life.time_text().contains("06:05"), "clock advances in five-minute steps after 12.5 real seconds")
 	var shared_before: float = host.life_economy.elapsed_hours
 	host.open_terminal("bunk")
 	host._command("pass")
@@ -243,6 +259,13 @@ func _persistence() -> void:
 
 func _cargo_and_cruise() -> void:
 	host.panel.hide()
+	host.walker.position=Vector3(0,-1.13,18);host.walker.rotation=Vector3.ZERO
+	host.paper_stowed=false;host._update_life_visuals()
+	var sample:int=int(host.packing.get_solution_order()[0])
+	check(host.pick_case(sample) and host.tool.visible and host.paper_stowed and not host.daily_paper.visible, "lifting a case equips the gun and stows paper")
+	press(KEY_H)
+	check(host.paper_stowed and not host.daily_paper.visible, "cannot retrieve paper while holding a box")
+	check(host.place_held(host.floor_target("pickup",0,Vector3i.ZERO,host.held_size)) and not host.tool.visible and not host.daily_paper.visible, "setting box down immediately holsters gun and keeps hands empty")
 	host.seated_table = false
 	await aim(Vector3(0,-1.13,18),Vector3(0,0,12))
 	var cargo_checks = CargoChecks.new()
@@ -443,3 +466,12 @@ func equivalent(a: Variant, b: Variant) -> bool:
 			if not equivalent(a[index],b[index]): return false
 		return true
 	return a == b
+
+func real_key(key:Key) -> void:
+	var event:=InputEventKey.new()
+	event.keycode=key;event.physical_keycode=key;event.pressed=true
+	Input.parse_input_event(event)
+	await frames(1)
+	event=InputEventKey.new();event.keycode=key;event.physical_keycode=key;event.pressed=false
+	Input.parse_input_event(event)
+	await frames(1)

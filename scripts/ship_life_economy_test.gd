@@ -38,12 +38,12 @@ func check_quotes() -> void:
 			check(job.advance == 0 and job.remaining_pay == job.payout, "fee paid at completion unless advance requested")
 			var hours := 0.0
 			for leg in job.legs:
-				check(leg.world_hours > 0.0 and leg.world_hours <= 216.0, "single leg under nine shipboard days")
+				check(leg.world_hours > 0.0 and leg.world_hours <= 12.0, "single leg under twelve shipboard hours with slower clock")
 				check(leg.minutes <= 30.0, "active flight estimate capped at thirty minutes")
 				hours += float(leg.world_hours)
 			check(is_equal_approx(job.world_hours, hours), "collection quote includes both world-time legs")
 			check(job.payout > int(ceil(hours / 24.0)) * 12 + job.fuel_cost + 35, "normal supplies fuel and upkeep leave profit")
-	check(e.offers()[0].world_hours < 48.0, "starting port offers a manageable one-to-two-day route with current flight physics")
+	check(e.offers()[0].world_hours < 3.0, "starting port offers a short job below three shipboard hours")
 	var flight = Economy.FlightState.new()
 	flight.fuel = 3000.0
 	flight.cargo_mass = 980.0
@@ -161,6 +161,14 @@ func check_save_restore() -> void:
 	check(loaded.request_advance(90) == 0, "reload cannot repeat an advance")
 	check(loaded.mark_collected(7) and loaded.finish_leg(job.destination), "restored collection continues")
 	check(loaded.complete(7, 7, job.destination), "restored collection settles")
+	var old_save:Dictionary=saved.duplicate(true)
+	old_save.erase("clock_rate")
+	old_save.active.world_hours*=18.0
+	for leg in old_save.active.legs:leg.world_hours*=18.0
+	check(loaded.restore(old_save), "old fast-clock save migrates")
+	check(loaded.active.payout==e.active.payout and loaded.active.remaining_pay==e.active.remaining_pay and loaded.credits==saved.credits and loaded.elapsed_hours==saved.elapsed_hours, "pacing migration preserves agreed fees wallet and elapsed progress")
+	check(is_equal_approx(loaded.active.world_hours,saved.active.world_hours) and loaded._offer_cache.is_empty(), "pacing migration updates remaining estimates and expires unsold quotes")
+	loaded.restore(saved)
 	var stable := loaded.snapshot()
 	var bad := saved.duplicate(true)
 	bad.station = 50
