@@ -2,6 +2,8 @@
 
 ## Future ship progression — 2026-10-07
 
+Latest concept work: [five compact starter hauler alternatives](ship-concepts/2026-10-07-starter/README.md) in the approved illustrated direction. Images and exact prompts are saved; awaiting user selection. No Blender, Godot or gameplay changes.
+
 Documentation only: [SHIP_PROGRESSION.md](SHIP_PROGRESSION.md) records the small starter ship, five proposed ship roles and the user's decision to trade in the current ship at a percentage loss toward a replacement. The percentage and valuation rules remain undecided. Do not implement progression yet. The user now considers the illustrated room style and warmer lighting direction established; future ship concepts should follow that study.
 
 ## Latest art study — 2026-10-07

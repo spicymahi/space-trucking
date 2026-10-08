@@ -24,6 +24,8 @@ The expedition and specialist mechanics are proposals, not existing features. Ke
 
 ## Art and implementation sequence
 
+Five starter-ship exterior alternatives are available in [the 2026-10-07 concept set](ship-concepts/2026-10-07-starter/README.md): Pika, Mule, Sidewinder, Kestrel and Cricket. These are alternatives for the same starter role, not replacements for the five progression classes. No exterior has been selected or modeled yet.
+
 The user has approved the new illustrated room style and its warmer, sharper-shadow lighting direction. Use the fresh [hab study](../studies/moebius_hab/README.md) as the visual reference: illustrated Moebius-inspired surfaces, cassette-futurist technology, purposeful details and restrained labeling.
 
 Proposed next design step: concept the starter ship exterior, then fit a usable cockpit, compact hab, washroom, machinery and cargo hold inside it. The room study establishes the style; its exact dimensions are not a requirement for every ship. Resolve walkways, cargo access and equipment clearance before detailed modeling.
