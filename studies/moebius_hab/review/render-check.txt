@@ -7,4 +7,4 @@ CAPTURE res://review/02-bunk.png
 CAPTURE res://review/03-galley.png
 CAPTURE res://review/04-reverse.png
 CAPTURE res://review/05-desk.png
-RENDER median_ms=8.335 p95=9.036 draws=290.0
+RENDER median_ms=8.372 p95=10.259 draws=290.0

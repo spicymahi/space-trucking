@@ -46,7 +46,8 @@ func _materials(node:Node) -> void:
             var title:String=source.resource_name
             if title in ["Light","CRT","Phosphor"]:
                 var flat:=StandardMaterial3D.new();flat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
-                flat.albedo_color=source.albedo_color;mesh.set_surface_override_material(i,flat)
+                flat.albedo_color=Color("ffdf9f") if title=="Light" else source.albedo_color
+                mesh.set_surface_override_material(i,flat)
             elif title in ["Ink","Seam"]:
                 var ink:=StandardMaterial3D.new();ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
                 ink.albedo_color=source.albedo_color;mesh.set_surface_override_material(i,ink)
@@ -72,27 +73,39 @@ func _lighting() -> void:
     var e:=env.environment
     e.background_mode=Environment.BG_COLOR;e.background_color=Color("173654")
     e.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
-    e.ambient_light_color=Color("b8c7dd");e.ambient_light_energy=0.53
+    # Restrained violet-grey bounce leaves room for warm practicals and dark recesses.
+    e.ambient_light_color=Color("b4bfd3");e.ambient_light_energy=0.30
     e.tonemap_mode=Environment.TONE_MAPPER_LINEAR;e.tonemap_exposure=1.0
     e.ssao_enabled=true;e.ssao_radius=0.28;e.ssao_intensity=1.5;e.ssao_power=1.5
     var sun:=DirectionalLight3D.new();add_child(sun);sun.name="WindowSun"
-    sun.rotation_degrees=Vector3(-24,-65,0);sun.light_color=Color("fff0d5");sun.light_energy=1.15
+    sun.rotation_degrees=Vector3(-24,-65,0);sun.light_color=Color("ffdda5");sun.light_energy=1.10
+    sun.light_angular_distance=0.0
     sun.shadow_enabled=true;sun.directional_shadow_mode=DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-    sun.directional_shadow_max_distance=18;sun.shadow_bias=0.12;sun.shadow_normal_bias=0.60
-    _omni(Vector3(.65,2.03,-1.20),Color("fff0d2"),0.85,6.5,true)
-    _omni(Vector3(.20,2.2,-3.85),Color("fff0d2"),0.40,4.5)
-    for p in [Vector3(0,2.48,0.9),Vector3(0,2.48,-2.0),Vector3(0,2.48,-4.4)]:
-        _omni(p,Color("ffe1ad"),0.15,2.7)
-    _omni(Vector3(-1.98,1.46,-4.07),Color("ffdc95"),0.27,1.1)
-    _omni(Vector3(1.70,1.59,-3.1),Color("fff0c4"),0.19,1.7)
-    _omni(Vector3(.42,2.2,-6.6),Color("ffe4b5"),.32,2.4)
+    sun.directional_shadow_max_distance=18;sun.shadow_bias=0.10;sun.shadow_normal_bias=0.35
+    # A small bounce contribution, rather than a room-wide key which washes out shadows.
+    _omni(Vector3(.65,1.95,-1.20),Color("ffe0b0"),0.16,4.4)
+    for p in [Vector3(.20,2.60,0.9),Vector3(.20,2.60,-2.0),Vector3(.20,2.60,-4.4)]:
+        _spot(p,p+Vector3.DOWN,Color("ffd39a"),1.20,4.0,65.0)
+    _spot(Vector3(-1.98,1.465,-4.07),Vector3(-1.75,0.95,-3.9),Color("ffd088"),0.70,1.75,53.0)
+    _omni(Vector3(-1.86,1.40,-4.03),Color("ffda9b"),0.10,1.15)
+    _omni(Vector3(1.70,1.59,-3.1),Color("ffdaa0"),0.36,1.85,true)
+    _spot(Vector3(.42,2.36,-6.6),Vector3(.42,.2,-6.6),Color("ffd7a0"),.55,3.1,64.0)
 
 func _omni(p:Vector3,c:Color,energy:float,radius:float,shadow:bool=false) -> void:
     var light:=OmniLight3D.new();add_child(light);light.position=p;light.light_color=c
     light.light_energy=energy;light.omni_range=radius;light.omni_attenuation=1.1
     light.light_specular=0;light.shadow_enabled=shadow
     if shadow:
-        light.light_size=0.15;light.shadow_bias=0.10;light.shadow_normal_bias=0.4
+        light.light_size=0.0;light.shadow_bias=0.08;light.shadow_normal_bias=0.3
+
+func _spot(p:Vector3,target:Vector3,c:Color,energy:float,radius:float,angle:float) -> void:
+    var light:=SpotLight3D.new();add_child(light);light.position=p
+    # A forward vector parallel to UP requires a different look-at reference axis.
+    light.look_at(target,Vector3.FORWARD if absf((target-p).normalized().y)>.98 else Vector3.UP)
+    light.light_color=c;light.light_energy=energy;light.light_specular=0.0
+    light.spot_range=radius;light.spot_angle=angle;light.spot_attenuation=1.1
+    light.spot_angle_attenuation=0.65;light.light_size=0.0
+    light.shadow_enabled=true;light.shadow_bias=0.08;light.shadow_normal_bias=0.30
 
 func _space_view() -> void:
     # Newly generated backdrop geometry; the reference image is never used as scenery.
