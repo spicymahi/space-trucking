@@ -46,6 +46,8 @@ The shared cockpit guide documents navigation, screens, paper, map and docking. 
 
 ## Documentation coverage
 
+Future ship ownership and trade-ins are recorded in [SHIP_PROGRESSION.md](SHIP_PROGRESSION.md). These are deferred design notes, not implemented gameplay.
+
 | Document | Purpose |
 | --- | --- |
 | [HANDOFF.md](HANDOFF.md) | First read for a new coding session: current state, entry points and continuation notes |
