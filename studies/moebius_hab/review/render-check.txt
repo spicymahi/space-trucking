@@ -1,0 +1,10 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Metal 4.0 - Forward+ - Using Device #0: Apple - Apple M3 Pro (Apple9)
+
+HAB READY / new authored materials 57 / no save or gameplay systems
+CAPTURE res://review/01-concept.png
+CAPTURE res://review/02-bunk.png
+CAPTURE res://review/03-galley.png
+CAPTURE res://review/04-reverse.png
+CAPTURE res://review/05-desk.png
+RENDER median_ms=8.335 p95=9.036 draws=290.0

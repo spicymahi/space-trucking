@@ -1,5 +1,9 @@
 # Current project handoff
 
+## Latest art study — 2026-10-07
+
+The user rejected the painterly material overlay and approved the Moebius-style bunk/personal-terminal concept as the reference for a freshly modeled, standalone room. **[Walk Illustrated Hab.command](../Walk%20Illustrated%20Hab.command)** opens `studies/moebius_hab/project.godot`: new Blender geometry, new illustrated materials/lighting, and walking/collision only. No prior game assets or controllers are used; the parent game and saves are untouched. See [the study guide](../studies/moebius_hab/README.md) for the editable `.blend`, rebuild script, actual Godot captures, controls and verification. This is awaiting in-engine art review, not an approved production conversion. Do not resume or promote the rejected overlay.
+
 Updated 2026-10-06. Read this first when resuming; then read the guide for the affected system and inspect its implementation. This is the repository handoff. The workspace-parent HANDOFF.md describes the older Claude prototype and is historical, not current project state.
 
 ## Where the project stands

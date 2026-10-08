@@ -1,0 +1,16 @@
+ERROR: Failed to open 'user://logs/godot2026-10-07T17.17.34.log'.
+   at: copy (core/io/dir_access.cpp:429)
+ERROR: Failed to open log file for writing: user://logs/godot.log
+   at: rotate_file (core/io/logger.cpp:169)
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+HAB READY / new authored materials 57 / no save or gameplay systems
+WALK (0.1, 0.0, -1.3) true distance=0.07043817639351 floor_y=-0.00115822604857
+WALK (0.1, 0.0, -4.35) true distance=0.08813147991896 floor_y=-0.00115822581574
+WALK (0.42, 0.0, -6.65) true distance=0.07010170072317 floor_y=0.0038417680189
+WALK (0.1, 0.0, -3.1) true distance=0.07415968924761 floor_y=-0.00115822348744
+WALK (0.1, 0.0, -0.9) true distance=0.08388154953718 floor_y=-0.0011582178995
+BUNK COLLISION true x=-0.86666691303253
+WALK TEST failures=0
