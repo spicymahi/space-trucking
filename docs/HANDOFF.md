@@ -2,6 +2,8 @@
 
 ## Future ship progression — 2026-10-07
 
+User selected **Outrigger** from the second exterior set. [Interior concepts and whole-ship cutaway](ship-concepts/2026-10-07-outrigger-interior/README.md) are now saved for review. Exterior approved; interior layout not yet approved or validated in 3D. Read the concept guide for provisional dimensions and image inconsistencies before modeling. No implementation requested yet.
+
 Latest feedback: first starter set was not approved; Sidewinder and Cricket were the most interesting. [Second set of five concepts](ship-concepts/2026-10-07-starter-v2/README.md) explores sharper asymmetric/twin-hull forms. Awaiting selection; concept art only.
 
 Latest concept work: [five compact starter hauler alternatives](ship-concepts/2026-10-07-starter/README.md) in the approved illustrated direction. Images and exact prompts are saved; awaiting user selection. No Blender, Godot or gameplay changes.
